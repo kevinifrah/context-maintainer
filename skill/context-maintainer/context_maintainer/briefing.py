@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import contract, gitutil, manifest as manifest_mod, mdsections, repository
+from . import contextlog, contract, gitutil, manifest as manifest_mod, mdsections
+from . import repository
 
 _PLACEHOLDER_ITALIC = re.compile(r"^_.*not yet documented.*_$", re.IGNORECASE)
 _MAX_SUMMARY_CHARS = 400
@@ -68,6 +69,7 @@ class StatusReport:
     recent_changes: List[str] = field(default_factory=list)
     staleness: StalenessInfo = field(default_factory=StalenessInfo)
     placeholder_files: List[str] = field(default_factory=list)
+    recent_context_updates: List[str] = field(default_factory=list)
     suggested_next_actions: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -84,6 +86,7 @@ class StatusReport:
             "recent_changes": self.recent_changes,
             "staleness": self.staleness.to_dict(),
             "placeholder_files": self.placeholder_files,
+            "recent_context_updates": self.recent_context_updates,
             "suggested_next_actions": self.suggested_next_actions,
         }
 
@@ -242,6 +245,7 @@ def build_status_report(root: Path) -> StatusReport:
 
     report.staleness = _compute_staleness(root, loaded)
     report.placeholder_files = _placeholder_files(root)
+    report.recent_context_updates = contextlog.read_recent(root, limit=3)
     report.suggested_next_actions = _suggest_actions(root, report)
     return report
 
@@ -297,6 +301,11 @@ def render_text(report: StatusReport) -> str:
         f"Context freshness: {'STALE' if report.staleness.is_stale else 'current'}"
         f" ({report.staleness.reason})"
     )
+    if report.recent_context_updates:
+        first = report.recent_context_updates[0].splitlines()
+        headline = first[0].lstrip("# ").strip() if first else ""
+        lines.append("")
+        lines.append(f"Last context update: {headline}")
     if report.recent_changes:
         lines.append("")
         lines.append("Recent commits:")

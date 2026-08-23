@@ -16,6 +16,21 @@ commit rewrites them, nobody can tell what actually changed.
 
 Finalize even when nothing changed — that is what keeps the next `sync` cheap.
 
+## The context log
+
+`--finalize --note "..."` appends one short entry to
+`.context-maintainer/log.md`: the timestamp, the commit, which context files
+changed (the CLI works that out itself), and your one-line reason.
+
+Write the note as *why*, not *what* — the file list already says what.
+"Storage moved to Postgres; ARCHITECTURE and DECISIONS updated" is useful;
+"updated ARCHITECTURE.md" is not.
+
+The log is capped at 20 entries and older history stays in Git, so it can never
+become the sprawling changelog `STATE.md` is forbidden from being. If no context
+file changed and you pass no note, nothing is recorded — a routine no-op sync
+should leave no trace.
+
 ## What affects what
 
 | Change | Usually update |

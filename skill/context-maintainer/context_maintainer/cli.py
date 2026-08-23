@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import __version__, briefing, contract, doctor, gitutil, manifest as manifest_mod
+from . import contextlog
 from . import installer as installer_mod
 from . import mcp_companion, repomix as repomix_mod, repository, scaffold
 
@@ -54,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="COMMIT",
         help="Advance the manifest checkpoint (to HEAD, or to COMMIT if given).",
     )
+    sync_parser.add_argument(
+        "--note",
+        default=None,
+        help="One line on why context changed, recorded in the context log.",
+    )
     sync_parser.add_argument("--json", action="store_true")
 
     doctor_parser = subparsers.add_parser(
@@ -80,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         metavar="COMMIT",
         help="Advance the manifest checkpoint after regeneration.",
+    )
+    rebuild_parser.add_argument(
+        "--note",
+        default=None,
+        help="One line on why context was rebuilt, recorded in the context log.",
     )
     rebuild_parser.add_argument("--json", action="store_true")
 
@@ -276,8 +287,27 @@ def _require_manifest(root: Path, as_json: bool) -> Optional[manifest_mod.Manife
         return None
 
 
+def _changed_context_files(root: Path, since: Optional[str]) -> List[str]:
+    """Which context documents changed since the old checkpoint.
+
+    Mechanical, so the CLI can supply it; the *reason* for the change is the
+    agent's job and arrives via --note.
+    """
+    if not since or not gitutil.is_git_repo(root):
+        return []
+    if not gitutil.commit_exists(root, since):
+        return []
+    owned = {cf.relative_path for cf in contract.CONTRACT_FILES}
+    changed = [path for _, path in gitutil.get_changed_files_since(root, since)]
+    return sorted(p for p in changed if p in owned)
+
+
 def _finalize_checkpoint(
-    root: Path, loaded: manifest_mod.Manifest, requested: Any, as_json: bool
+    root: Path,
+    loaded: manifest_mod.Manifest,
+    requested: Any,
+    as_json: bool,
+    note: Optional[str] = None,
 ) -> int:
     if not gitutil.is_git_repo(root):
         _emit(
@@ -303,17 +333,32 @@ def _finalize_checkpoint(
         )
         return 1
 
+    # Capture what changed before the checkpoint moves past it.
+    updated = _changed_context_files(root, loaded.last_verified_commit)
+
     manifest_mod.update_checkpoint(loaded, target)
     manifest_mod.save_manifest(loaded, root / contract.MANIFEST_PATH)
-    _emit(
-        {
-            "ok": True,
-            "last_verified_commit": loaded.last_verified_commit,
-            "last_synced_at": loaded.last_synced_at,
-        },
-        f"Checkpoint advanced to {target[:8]} at {loaded.last_synced_at}.",
-        as_json,
-    )
+
+    logged = contextlog.append_entry(root, commit=target, files=updated, note=note)
+
+    payload = {
+        "ok": True,
+        "last_verified_commit": loaded.last_verified_commit,
+        "last_synced_at": loaded.last_synced_at,
+        "context_files_updated": updated,
+        "logged": str(logged) if logged else None,
+    }
+    lines = [f"Checkpoint advanced to {target[:8]} at {loaded.last_synced_at}."]
+    if updated:
+        lines.append("Context files updated: " + ", ".join(updated))
+    if logged:
+        lines.append(f"Recorded in {contextlog.LOG_RELPATH}.")
+    elif not note:
+        lines.append(
+            "Nothing recorded in the log (no context files changed). Pass "
+            "--note to record why a sync happened anyway."
+        )
+    _emit(payload, "\n".join(lines), as_json)
     return 0
 
 
@@ -324,7 +369,9 @@ def cmd_sync(args: argparse.Namespace) -> int:
         return 1
 
     if args.finalize is not False:
-        return _finalize_checkpoint(root, loaded, args.finalize, args.json)
+        return _finalize_checkpoint(
+            root, loaded, args.finalize, args.json, note=args.note
+        )
 
     if not gitutil.is_git_repo(root):
         _emit(
@@ -417,7 +464,9 @@ def cmd_rebuild(args: argparse.Namespace) -> int:
         return 1
 
     if args.finalize is not False:
-        return _finalize_checkpoint(root, loaded, args.finalize, args.json)
+        return _finalize_checkpoint(
+            root, loaded, args.finalize, args.json, note=args.note
+        )
 
     if not args.prepare:
         _emit(

@@ -88,7 +88,8 @@ stay cheap and must not churn the documents.
    memory.
 4. Edit only the sections that are genuinely now wrong. Leave everything else
    byte-identical.
-5. `context-maintainer sync --finalize` to advance the checkpoint.
+5. `context-maintainer sync --finalize --note "<one line on what changed
+   and why>"` to advance the checkpoint and record the update.
 6. `context-maintainer doctor` to confirm you left the contract valid.
 
 Never re-scan the whole repository during `sync`. If a change is large enough
@@ -118,7 +119,8 @@ contract version change, or when the first initialization was poor.
    `DECISIONS.md` forward. Mark what reality has overtaken as `Superseded` and
    link the decision that replaced it. Never delete a decision because it is
    no longer current.
-5. `context-maintainer rebuild --finalize`, then `doctor`.
+5. `context-maintainer rebuild --finalize --note "<why a rebuild was
+   needed>"`, then `doctor`.
 
 ## Confirming intent
 

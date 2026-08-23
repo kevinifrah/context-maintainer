@@ -281,11 +281,36 @@ context-maintainer status
 Incremental maintenance — the command you run most. It reads the last verified commit from the manifest, compares it to `HEAD`, and reports what changed. The skill then updates **only** the sections that are genuinely now wrong.
 
 ```bash
-context-maintainer sync              # what changed since the checkpoint?
-context-maintainer sync --finalize   # advance the checkpoint
+context-maintainer sync                             # what changed since the checkpoint?
+context-maintainer sync --finalize --note "why"     # advance the checkpoint, log the update
 ```
 
 Most changes update nothing. A CSS tweak touches no document; a new auth service updates ARCHITECTURE and STATE; a storage migration also updates DECISIONS. `sync` never re-scans the whole repository — that's what `rebuild` is for.
+
+### The context update log
+
+`--finalize --note "..."` appends one short entry to
+`.context-maintainer/log.md`:
+
+```markdown
+## 2026-08-24T09:14:02+00:00 — 11095042
+
+Updated: docs/context/STATE.md
+
+Added service.py; recorded the new module in STATE.
+```
+
+The CLI works out *which* context files changed; the note says *why*. It answers
+"when was context last touched, and what for?" without digging through Git.
+
+Three deliberate limits: it is **capped at 20 entries** (older history is in
+Git); it lives in `.context-maintainer/` rather than `docs/context/` because it
+is tool bookkeeping, not project knowledge; and it records **nothing** when no
+context file changed and no note was given, so routine no-op syncs leave no
+trace. `status` shows the most recent entry.
+
+This is deliberately not a changelog. `STATE.md` is a snapshot and must never
+become a diary — the log exists so that rule can stay strict.
 
 ### `doctor`
 
