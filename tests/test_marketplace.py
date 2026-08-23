@@ -134,6 +134,30 @@ def test_claude_marketplace_version_tracks_the_package():
     assert _load(CLAUDE_MARKETPLACE)["plugins"][0]["version"] == __version__
 
 
+def test_pyproject_version_matches_the_package_version():
+    """These drifting apart is not cosmetic.
+
+    Both hosts cache an installed plugin under a version-keyed path, so a
+    content change shipped without a version bump means two users can both be
+    'on 0.2.0' while running different code — and an update may not re-fetch.
+    """
+    import re
+
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
+    assert match, "could not find version in pyproject.toml"
+    assert match.group(1) == __version__, (
+        f"pyproject.toml says {match.group(1)}, package says {__version__}"
+    )
+
+
+def test_every_manifest_agrees_on_the_version():
+    for path in (CLAUDE_MARKETPLACE, REPO_ROOT / "skill/context-maintainer/.codex-plugin/plugin.json"):
+        data = _load(path)
+        version = data.get("version") or data["plugins"][0]["version"]
+        assert version == __version__, path
+
+
 def test_validate_marketplaces_passes_for_the_shipped_repo():
     assert pluginspec.validate_marketplaces(REPO_ROOT) == []
 
