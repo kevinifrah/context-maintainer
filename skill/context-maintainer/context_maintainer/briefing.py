@@ -112,8 +112,16 @@ def _clean_section(body: Optional[str]) -> Optional[str]:
     if not kept:
         return None
     text = " ".join(kept)
-    if text.strip().strip(".").strip().lower() in _EMPTY_EQUIVALENTS:
-        return None
+
+    # Check the first sentence, not the whole body: an evidence-graded document
+    # writes "None. CONFIRMED (user, 2026-08-24)." and the annotation must not
+    # make an empty section look like real content — otherwise `status` reports
+    # blockers that do not exist. "None of the storage layer is migrated" is a
+    # longer first sentence, so it is correctly treated as content.
+    first_sentence = text.split(".", 1)[0]
+    for candidate in (text, first_sentence):
+        if candidate.strip().strip(".").strip().lower() in _EMPTY_EQUIVALENTS:
+            return None
     if len(text) > _MAX_SUMMARY_CHARS:
         text = text[: _MAX_SUMMARY_CHARS - 1].rstrip() + "…"
     return text

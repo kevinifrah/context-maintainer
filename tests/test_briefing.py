@@ -208,3 +208,32 @@ def test_agents_md_and_claude_md_count_as_context_owned(existing_repo: Path):
 
     report = briefing.build_status_report(existing_repo)
     assert report.staleness.is_stale is False
+
+
+def test_none_followed_by_an_evidence_annotation_is_still_empty(existing_repo: Path):
+    """Evidence-graded docs write "None. CONFIRMED (user, date)." for an empty
+    section; the annotation must not make it look like real content."""
+    _initialize(existing_repo, mode="existing")
+    _set_section(
+        existing_repo,
+        "docs/context/STATE.md",
+        "Blockers",
+        "None. CONFIRMED (user, 2026-08-24).",
+    )
+    report = briefing.build_status_report(existing_repo)
+    assert report.blockers is None
+    assert not any("blockers" in a.lower() for a in report.suggested_next_actions)
+
+
+def test_none_beginning_a_real_sentence_is_still_content(existing_repo: Path):
+    """"None of the storage layer is migrated" is a blocker, not an empty section."""
+    _initialize(existing_repo, mode="existing")
+    _set_section(
+        existing_repo,
+        "docs/context/STATE.md",
+        "Blockers",
+        "None of the storage layer is migrated yet.",
+    )
+    report = briefing.build_status_report(existing_repo)
+    assert report.blockers is not None
+    assert "storage layer" in report.blockers
