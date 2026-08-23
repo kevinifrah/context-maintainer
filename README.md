@@ -18,6 +18,7 @@
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Commands](#commands)
+- [Staying current automatically](#staying-current-automatically)
 - [The context contract](#the-context-contract)
 - [How Claude Code and Codex share context](#how-claude-code-and-codex-share-context)
 - [How Repomix is used](#how-repomix-is-used)
@@ -98,6 +99,7 @@ context-maintainer/
 │   ├── SKILL.md                   # the skill (also serves plain-skill discovery)
 │   ├── references/                # audit protocol, evidence + sync policy…
 │   ├── scripts/cm.sh              # launcher: pip console script, else bundled package
+│   ├── hooks/hooks.json           # SessionStart: warns when context is stale
 │   ├── .claude-plugin/plugin.json
 │   ├── .codex-plugin/plugin.json
 │   ├── skills/context-maintainer/ # symlinks — Codex's expected plugin layout
@@ -323,6 +325,45 @@ context-maintainer skill status
 context-maintainer skill install [--force] [--dry-run]
 context-maintainer skill uninstall [--force] [--dry-run]
 ```
+
+---
+
+## Staying current automatically
+
+Context only helps if it is true, and remembering to run `sync` is exactly the
+kind of discipline that lapses. So the plugin ships a `SessionStart` hook.
+
+When you open a project, it runs a read-only freshness check and — only if
+something needs attention — tells the agent:
+
+```
+Context Maintainer: this project's recorded context may be out of date —
+2 commit(s) and 11 file(s) changed since the last checkpoint. Read
+docs/context/PROJECT.md and docs/context/STATE.md before substantial work,
+and run the context-maintainer sync workflow if what they say is no longer
+true.
+```
+
+The agent then reads the context and can offer to sync before doing anything
+substantial, instead of trusting stale documents.
+
+Three deliberate constraints:
+
+- **Silent unless it matters.** No notice in projects that never adopted
+  Context Maintainer, and none when context is already current. A hook that
+  speaks every time gets ignored.
+- **Never writes.** Detection only. The prose is still written by the agent,
+  in session, where you can see and correct it.
+- **Never disrupts a session.** It always exits 0 — a broken environment,
+  a corrupt manifest, or a missing interpreter produces silence, not an error.
+
+### What it deliberately does not do
+
+There is no hook that rewrites your context unattended. A script could
+mechanically advance the checkpoint on every commit, but that would mark
+context as reviewed when nobody reviewed it — silently wrong documentation is
+worse than visibly stale documentation. Deciding what a change *means* needs
+judgment, so it stays with the agent, in a session you can see.
 
 ---
 
@@ -558,6 +599,7 @@ Not promises — directions that seem sensible:
 - A `doctor --repair` for narrowly safe fixes (recreating a missing cache `.gitignore`, repairing a broken symlink)
 - Real monorepo support: per-package context with a root index
 - A pre-commit or CI mode that fails when a change plainly invalidates documented architecture
+- An opt-in git `post-commit` warning, for commits made outside an agent session
 - Optional additional audit backends behind the same "evidence in, graded claims out" interface
 - Marketplace-installable plugin packaging for both hosts
 - Windows support via junctions or a copy-based install

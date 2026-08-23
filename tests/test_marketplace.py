@@ -165,6 +165,8 @@ def test_plugin_directory_carries_everything_the_skill_needs():
         "references/sync-policy.md",
         "references/mcp-companion.md",
         "scripts/cm.sh",
+        "hooks/hooks.json",
+        "hooks/session-start.sh",
         "context_maintainer/cli.py",
         "context_maintainer/templates/PROJECT.md.tmpl",
         ".claude-plugin/plugin.json",

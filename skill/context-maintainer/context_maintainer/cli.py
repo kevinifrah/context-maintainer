@@ -112,6 +112,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit_parser.add_argument("--json", action="store_true")
 
+    hook_parser = subparsers.add_parser(
+        "hook",
+        help="Emit agent-facing notices for host hooks (internal; always exits 0).",
+    )
+    hook_sub = hook_parser.add_subparsers(dest="hook_event")
+    session_start = hook_sub.add_parser(
+        "session-start",
+        help="Report stale or incomplete context when a project is opened.",
+    )
+    session_start.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+
     skill_parser = subparsers.add_parser(
         "skill", help="Manage the global skill installation for Claude Code and Codex."
     )
@@ -499,6 +510,66 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Keep hook output short: Codex truncates injected context at 2500 chars by
+#: default, and a session-start notice competes with everything else for
+#: attention.
+MAX_HOOK_NOTICE_CHARS = 900
+
+
+def session_start_notice(root: Path) -> Optional[str]:
+    """The notice to inject when a project is opened, or None to stay silent.
+
+    Deliberately silent unless the project has *adopted* Context Maintainer and
+    something needs doing. Announcing itself in every unrelated repository
+    would be nagging, and a hook that cries wolf gets ignored.
+    """
+    if not repository.is_initialized(root):
+        return None
+
+    report = briefing.build_status_report(root)
+    problems = []
+
+    if report.staleness.is_stale:
+        problems.append(report.staleness.reason)
+    if report.placeholder_files:
+        count = len(report.placeholder_files)
+        problems.append(
+            f"{count} context file{'s' if count != 1 else ''} still contain "
+            "unfilled template placeholders"
+        )
+
+    if not problems:
+        return None
+
+    # Deliberately terse. This competes for attention with everything else at
+    # the start of a session, and a wall of text gets skimmed even when true.
+    # The goal/architecture summary is left out on purpose: the notice points
+    # at the documents rather than trying to replace them.
+    notice = (
+        "Context Maintainer: this project's recorded context may be out of "
+        "date — " + "; ".join(problems) + ". Read docs/context/PROJECT.md and "
+        "docs/context/STATE.md before substantial work, and run the "
+        "context-maintainer sync workflow if what they say is no longer true."
+    )
+    if len(notice) > MAX_HOOK_NOTICE_CHARS:
+        notice = notice[: MAX_HOOK_NOTICE_CHARS - 1].rstrip() + "…"
+    return notice
+
+
+def cmd_hook(args: argparse.Namespace) -> int:
+    """Host-hook entry point. Never fails, never writes, never blocks."""
+    try:
+        if args.hook_event != "session-start":
+            return 0
+        notice = session_start_notice(_resolve_root())
+        if notice:
+            print(notice)
+    except Exception:
+        # A hook must never disrupt a session, whatever goes wrong.
+        pass
+    return 0
+
+
 def cmd_skill(args: argparse.Namespace) -> int:
     """Manage the global skill installation. Never touches project files."""
     if not args.skill_command:
@@ -550,6 +621,7 @@ _HANDLERS = {
     "rebuild": cmd_rebuild,
     "audit": cmd_audit,
     "skill": cmd_skill,
+    "hook": cmd_hook,
 }
 
 

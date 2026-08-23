@@ -35,9 +35,21 @@ def test_readme_exists_and_is_substantial(readme: str):
     assert len(readme) > 5000
 
 
-def test_readme_documents_all_cli_subcommands(readme: str):
-    for command in _subcommands():
+#: Invoked by the host, never typed by a user. Listing these in the README's
+#: command reference would imply they are part of the interface. The features
+#: they implement are documented in prose instead.
+INTERNAL_SUBCOMMANDS = {"hook"}
+
+
+def test_readme_documents_all_user_facing_cli_subcommands(readme: str):
+    for command in _subcommands() - INTERNAL_SUBCOMMANDS:
         assert re.search(rf"^###\s+`{command}`", readme, re.MULTILINE), command
+
+
+def test_internal_subcommands_still_have_their_feature_documented(readme: str):
+    """`hook` is not a command to type, but the behaviour must be explained."""
+    assert "SessionStart" in readme
+    assert "hooks/hooks.json" in readme
 
 
 def test_readme_documents_every_contract_file(readme: str):
