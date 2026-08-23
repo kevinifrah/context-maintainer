@@ -166,3 +166,45 @@ def test_long_sections_are_truncated(blank_repo: Path):
     report = briefing.build_status_report(blank_repo)
     assert len(report.goal) <= briefing._MAX_SUMMARY_CHARS
     assert report.goal.endswith("…")
+
+
+def test_commits_touching_only_context_files_are_not_reported_as_drift(
+    existing_repo: Path,
+):
+    """A sync's own bookkeeping must not make the tool report itself stale.
+
+    `sync --finalize` writes the manifest; committing that write lands after
+    the checkpoint it recorded. Counting that as drift produced a permanent
+    false positive right after every sync.
+    """
+    _initialize(existing_repo, mode="existing")
+    _set_section(existing_repo, "docs/context/STATE.md", "Phase", "Shipping.")
+    commit_all(existing_repo, "Sync context and advance checkpoint")
+
+    report = briefing.build_status_report(existing_repo)
+    assert report.staleness.commits_behind == 1
+    assert report.staleness.files_changed == 0
+    assert report.staleness.is_stale is False
+    assert "no code drift" in report.staleness.reason
+
+
+def test_code_changes_alongside_context_changes_still_count_as_drift(
+    existing_repo: Path,
+):
+    _initialize(existing_repo, mode="existing")
+    _set_section(existing_repo, "docs/context/STATE.md", "Phase", "Shipping.")
+    write(existing_repo, "src/app/billing.py", "def charge():\n    return True\n")
+    commit_all(existing_repo, "Add billing alongside a context edit")
+
+    report = briefing.build_status_report(existing_repo)
+    assert report.staleness.is_stale is True
+    assert report.staleness.files_changed == 1
+
+
+def test_agents_md_and_claude_md_count_as_context_owned(existing_repo: Path):
+    _initialize(existing_repo, mode="existing")
+    write(existing_repo, "AGENTS.md", "# rules\n\nUpdated router.\n")
+    commit_all(existing_repo, "Tweak agent instructions")
+
+    report = briefing.build_status_report(existing_repo)
+    assert report.staleness.is_stale is False

@@ -126,6 +126,19 @@ def _section(root: Path, relative_path: str, heading: str) -> Optional[str]:
     return _clean_section(mdsections.get_section(text, heading))
 
 
+def _is_context_owned(relative_path: str) -> bool:
+    """True for files Context Maintainer maintains itself.
+
+    Changes confined to these are the *result* of a sync, not evidence that a
+    sync is needed.
+    """
+    if relative_path in ("AGENTS.md", "CLAUDE.md"):
+        return True
+    return relative_path.startswith(
+        (contract.CONTEXT_DIR + "/", ".context-maintainer/")
+    )
+
+
 def _compute_staleness(root: Path, loaded: Optional[manifest_mod.Manifest]) -> StalenessInfo:
     info = StalenessInfo()
     if loaded is None:
@@ -155,12 +168,28 @@ def _compute_staleness(root: Path, loaded: Optional[manifest_mod.Manifest]) -> S
         return info
 
     info.commits_behind = len(gitutil.get_commits_since(root, loaded.last_verified_commit))
-    info.files_changed = len(
-        gitutil.get_changed_files_since(root, loaded.last_verified_commit)
-    )
-    info.is_stale = info.commits_behind > 0
+    changed = [
+        path
+        for _, path in gitutil.get_changed_files_since(root, loaded.last_verified_commit)
+    ]
+
+    # Finalizing a sync writes the manifest, and committing that write lands
+    # *after* the checkpoint it just recorded. Counting our own bookkeeping as
+    # drift would make the tool report itself stale immediately after every
+    # sync — a false positive that teaches people to ignore the warning.
+    substantive = [p for p in changed if not _is_context_owned(p)]
+    info.files_changed = len(substantive)
+
+    if not substantive:
+        info.reason = (
+            f"{info.commits_behind} commit(s) since the checkpoint, all of them "
+            "confined to context files — no code drift"
+        )
+        return info
+
+    info.is_stale = True
     info.reason = (
-        f"{info.commits_behind} commit(s) and {info.files_changed} file(s) "
+        f"{info.commits_behind} commit(s) and {len(substantive)} file(s) "
         "changed since the last checkpoint"
     )
     return info
