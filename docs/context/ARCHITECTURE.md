@@ -50,6 +50,19 @@ Skill-side: `SKILL.md` (the only real copy; the one under
 test enforces this) plus `references/{audit-protocol,context-contract,
 evidence-policy,sync-policy,mcp-companion}.md`.
 
+Hook-side (added v0.2.0): `hooks/hooks.json` registers a single `SessionStart`
+hook, auto-discovered by both hosts from the plugin root. It runs
+`hooks/session-start.sh`, a thin wrapper over `cli.py`'s `hook session-start`
+subcommand, which prints a one-paragraph notice to stdout — added to the
+agent's context by both hosts — only when the project is initialized *and*
+either context is behind HEAD or placeholders remain. CONFIRMED by direct
+reading and by `tests/test_session_start_hook.py`.
+
+Deliberately absent: a `Stop` hook. Its only channel to the model is
+`decision: "block"`, which would interrupt every turn and risks a loop, so
+the per-turn "did this change project reality?" question is handled by
+instructions in `AGENTS.md` and `SKILL.md` instead of a hook. See DEC-004.
+
 ## Data Flow
 
 1. A user invokes a skill command (`/context-maintainer:context-maintainer
@@ -129,6 +142,8 @@ CONFIRMED: README "The context contract", `contract.py`, `.gitignore`.
   see README's note on command names, since the plugin manifest makes this a
   namespaced plugin command).
 - Codex: `$context-maintainer`.
+- Host-invoked entry point (not user-facing): `hook session-start`, called by
+  the `SessionStart` hook via `hooks/session-start.sh`. Always exits 0.
 - CI entry point: `.github/workflows/ci.yml` runs `pytest -q` on Python 3.9
   and 3.12.
 

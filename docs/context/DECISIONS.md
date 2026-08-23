@@ -99,3 +99,41 @@ used by large public marketplaces, rather than each plugin needing its own
 marketplace.
 
 Date/commit if known: 2026-08-24, 92132b1
+
+## DEC-004: Automatic staleness detection via SessionStart, not a per-turn Stop hook
+
+Status: Accepted
+
+Decision: Detect stale context with a single `SessionStart` hook, and handle
+the per-turn "did this change project reality?" question with instructions in
+`AGENTS.md` and `SKILL.md` rather than a hook.
+
+Why: The event that fires after every agent output is `Stop`, whose only
+channel to the model is `decision: "block"` — it cannot inform without
+preventing the turn from finishing. Since the sync policy's own default answer
+is "update nothing", a per-turn prompt would report "nothing needed" most of
+the time and train users and agents to dismiss it. Noise does not produce
+diligence.
+
+Evidence/context: Claude Code hooks reference (Stop supports `decision`,
+`reason`, `systemMessage`; SessionStart adds plain stdout to context). The
+non-blocking `asyncRewake` field appears in a shipped Anthropic plugin but not
+in public documentation, so it was not relied on. CONFIRMED by reading both
+hosts' hook documentation and real shipped `hooks.json` files.
+
+Alternatives considered: a `Stop` hook gated by `once: true` (still interrupts,
+and fires at most once so it is not really per-turn); a git `post-commit` hook
+that runs `sync --finalize` mechanically (rejected outright — it would mark
+context as reviewed when nobody reviewed it, and silently wrong documentation
+is worse than visibly stale documentation); headless `claude -p` auto-sync on
+commit (writes unreviewed prose into the repository, inverting the premise that
+these documents are trustworthy because a human saw them).
+
+Consequences: Staleness introduced *outside* a session (other developers, other
+tools, commits made without an agent) is caught automatically at session start.
+Staleness introduced *within* a session depends on the agent following
+instructions, which is visible but not enforced. A `Stop`-based enforcement
+path remains available if instructions prove insufficient.
+
+Date/commit if known: 2026-08-24, c3a5159 and 76721f8
+

@@ -8,18 +8,16 @@ decisions live in DECISIONS.md.
 
 ## Phase
 
-Pre-release polish for v0.1.0. CONFIRMED (user, 2026-08-24), consistent with
-the last five commits, which fix marketplace naming, plugin-install
-detection, and doc accuracy rather than adding new capability.
+v0.2.0 released and published; awaiting real-world validation. CONFIRMED:
+`git tag` shows v0.1.0 and v0.2.0, both with GitHub releases; CHANGELOG
+records both.
 
 ## Objective
 
-Preparing for public release: recent work closed out rough edges in the
-plugin/marketplace mechanics (marketplace renamed to `kevinifrah` to remove
-a naming stutter; `doctor` fixed to recognize a marketplace plugin install,
-not just a symlink install; docs updated to point at the real
-`kevinifrah/context-maintainer` repository coordinates). CONFIRMED (user,
-2026-08-24).
+Closing the loop between "context exists" and "context stays true". v0.2.0
+added the `SessionStart` hook (automatic staleness detection across sessions)
+and made the per-turn update decision explicit and reportable in `AGENTS.md`
+and `SKILL.md`. CONFIRMED by commits c3a5159, 76721f8, 0a1e7e2.
 
 ## Implemented
 
@@ -55,17 +53,14 @@ None. CONFIRMED (user, 2026-08-24).
 
 ## Next
 
-Real-world dogfooding: use the tool on actual projects to validate that the
-skill-generated context is actually accurate and useful, not just
-well-structured — the README explicitly flags this as unproven ("the parts
-that depend on a live coding agent... need real-world use to prove out").
-CONFIRMED (user, 2026-08-24).
+Validate that generated context is *accurate*, not merely well-structured —
+still the main unproven claim, and now testable since both a blank and an
+existing fixture workflow are documented in `docs/TESTING.md`.
 
-Secondary, lower-priority items visible from this audit, not confirmed as
-committed plans:
-- README's own "320 passing" test badge is stale (338 actually pass as of
-  this audit) — a small doc-accuracy fix.
-- README's "Future ideas" section lists further candidates (`doctor
-  --repair`, real monorepo support, a CI-integrated drift-check mode,
-  Windows support, contract versioning) explicitly as directions, not
-  commitments.
+Specifically outstanding:
+- A cold install by someone with no local checkout has never been exercised;
+  every install so far happened on the machine holding the repository.
+- Codex plugin-local hooks may not execute yet (openai/codex#16430), so the
+  `SessionStart` hook is verified on Claude Code only.
+- Whether the `AGENTS.md` "state your conclusion" instruction actually
+  changes agent behaviour is unmeasured.
