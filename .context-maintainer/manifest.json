@@ -1,8 +1,8 @@
 {
-  "context_maintainer_version": "0.1.0",
+  "context_maintainer_version": "0.2.0",
   "initialized_at": "2026-08-23T22:30:17+00:00",
-  "last_synced_at": "2026-08-23T22:30:17+00:00",
-  "last_verified_commit": "92132b107343a07d3d0e15e711d5abf4d284ad7d",
+  "last_synced_at": "2026-08-23T23:30:41+00:00",
+  "last_verified_commit": "f696264115e39a1e05b46ab03f3fdf4bf6dbbfca",
   "mcp_language_server_configured": false,
   "mode": "existing",
   "repomix_version": null,
