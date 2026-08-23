@@ -4,7 +4,7 @@ Used by `init` on an existing repository, and by `rebuild`. The goal is to
 understand the project well enough to write context that is true, before
 writing anything.
 
-Do not create or edit context documents until step 7.
+Do not create or edit context documents until step 8.
 
 ## 1. Establish ground truth cheaply
 
@@ -28,7 +28,7 @@ repository: top-level layout, where source lives, where tests live, how big the
 thing actually is.
 
 If this reports `degraded_mode: true`, Repomix is unavailable. Continue with
-Git and direct reading, and remember to record reduced confidence at step 7.
+Git and direct reading, and remember to record reduced confidence at step 8.
 
 ## 3. Manifests, configuration, and CI
 
@@ -76,7 +76,22 @@ INFERRED to CONFIRMED.
 
 If it is not configured, do not pretend to a call graph you have not verified.
 
-## 7. Synthesise, then write
+## 7. Confirm intent before writing
+
+The audit establishes what the project *is*. It cannot establish what is
+*planned* — that information exists only in the user's head. Present a short
+summary of your confident findings, then ask only about the gaps: current
+objective, work in progress, blockers, and the next milestone.
+
+Offer your inference and ask for confirmation rather than asking open questions
+("recent commits suggest you are mid-way through auth — is that the current
+objective?"). If the user does not answer, write UNKNOWN. Never invent an
+objective to make STATE.md look finished.
+
+Full rules, including what not to ask, are in the "Confirming intent" section
+of `SKILL.md`.
+
+## 8. Synthesise, then write
 
 Build the model first, in your head or in notes — not in the documents. It
 should cover: project identity and purpose; the evidence for that purpose;
@@ -92,14 +107,14 @@ Record in ARCHITECTURE.md's "Evidence Level" section: which passes ran, what
 was unavailable, and where confidence is weakest. If Repomix was missing or the
 audit was partial, say so there.
 
-## 8. Migrate instructions, do not overwrite them
+## 9. Migrate instructions, do not overwrite them
 
 If `init` reported `existing_agent_files`, follow the migration rules in
 `SKILL.md`. Preserve real house rules, deduplicate, put cross-agent rules in
 `AGENTS.md`, keep Claude-specific ones in `CLAUDE.md` below the `@AGENTS.md`
 import, and never discard something meaningful silently.
 
-## 9. Verify your own work
+## 10. Verify your own work
 
 ```bash
 context-maintainer doctor

@@ -50,6 +50,8 @@ initialized, use `sync` or `rebuild` instead.
    Never ask a question the repository or conversation has already answered.
 3. **If `mode` is `existing`:** do not write documents yet. Follow
    `references/audit-protocol.md` first, then write them from that evidence.
+   The audit tells you what the project *is*; it cannot tell you what is
+   *planned* — so confirm intent before writing. See "Confirming intent" below.
 4. **If `existing_agent_files` is non-empty:** migrate rather than replace.
    See "Migrating existing instructions" below.
 5. Replace every `<!-- CONTEXT-MAINTAINER: PLACEHOLDER -->` marker with real
@@ -117,6 +119,57 @@ contract version change, or when the first initialization was poor.
    link the decision that replaced it. Never delete a decision because it is
    no longer current.
 5. `context-maintainer rebuild --finalize`, then `doctor`.
+
+## Confirming intent
+
+Evidence in a repository answers "what is this?". It does not answer "where is
+this going?". Git history shows what happened, not what was decided to happen
+next. So four fields cannot be responsibly derived from code alone:
+
+- `STATE.md` → **Objective** (what is being worked on *now*)
+- `STATE.md` → **In Progress**
+- `STATE.md` → **Blockers**
+- `STATE.md` → **Next**
+
+Plus, often, `PROJECT.md` → Success Criteria and open product questions.
+
+After the audit and before finalising the documents, present what you found and
+ask about only those gaps. Keep it short — a handful of specific questions,
+informed by the audit, not a questionnaire:
+
+> I audited the repository. Here is what I am confident about:
+> — it is a Flask service for turning widget orders into fulfilment jobs
+> — tests run with `pytest -q` (CI confirms it; the README is stale and still
+>   says unittest)
+> — token auth was added recently, in the last few commits
+>
+> Three things the code cannot tell me:
+> 1. What are you working on right now?
+> 2. Anything blocking you?
+> 3. What is the next meaningful milestone?
+>
+> I will record your answers in STATE.md. If you would rather not say, I will
+> mark those sections UNKNOWN rather than guess.
+
+Rules for this step:
+
+- **Ask about gaps, not about things you already established.** A question with
+  an answer visible in the repository wastes the user's attention and damages
+  trust in the rest of your questions.
+- **Reuse the conversation.** If the user already said what they are building
+  or what is next, do not ask again.
+- **Never block on it.** If the user does not answer, or says "just do your
+  best", write UNKNOWN in those sections. An honest UNKNOWN is correct; an
+  invented objective is not.
+- **Offer your inference, ask for confirmation.** "Recent commits suggest you
+  are mid-way through adding auth — is that the current objective?" is better
+  than an open question, and better than silently writing it as fact.
+- **Label what came from the user.** Their answers are CONFIRMED (they are the
+  authority on intent); your reconstruction from commits is INFERRED.
+
+The same applies, more briefly, during `sync`: if changes since the checkpoint
+show a milestone finished or a new direction started, confirm what comes next
+rather than inferring it. One question is usually enough.
 
 ## Migrating existing instructions
 
