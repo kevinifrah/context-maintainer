@@ -18,5 +18,30 @@ Durable project knowledge lives under `docs/context/`. Read these before doing s
 - `docs/context/` is the durable source of truth for this project. Do not duplicate its content here or invent a competing summary.
 - Do not silently reverse a documented decision in `docs/context/DECISIONS.md`. If reality has changed, record a new decision that supersedes it.
 - Do not convert an assumption into a documented fact. Mark uncertain claims as such.
-- After a meaningful change, run the Context Maintainer sync workflow (`context-maintainer sync`, or the `context-maintainer` skill's sync behavior) so `docs/context/` stays accurate.
 - Only update `docs/context/` when the project reality has actually changed — avoid churn.
+
+## Keeping context current
+
+Before you finish a piece of work, decide whether it changed project reality,
+and **state your conclusion** — either what you updated, or "no context update
+needed". Silently skipping this check is indistinguishable from having done it,
+which is how context goes stale.
+
+Most changes need nothing: bug fixes, refactors within a component, copy edits,
+formatting, dependency bumps, test additions. Say so and move on.
+
+These do need an update:
+
+| Change | Update |
+| --- | --- |
+| New component, service, integration, or external dependency | ARCHITECTURE, STATE |
+| Storage, auth, or data-flow change | ARCHITECTURE, STATE, DECISIONS |
+| Dev, test, build, or deploy command changed | WORKFLOWS |
+| Milestone finished, work started, blocker hit or cleared | STATE |
+| Product direction or scope changed | PROJECT, STATE |
+| A documented decision deliberately reversed | DECISIONS — supersede it, never delete |
+
+When one applies, run the Context Maintainer sync workflow
+(`context-maintainer sync`, or the `context-maintainer` skill) and update only
+the sections that are genuinely now wrong. Read a section before concluding it
+is unaffected.

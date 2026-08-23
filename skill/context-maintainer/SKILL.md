@@ -189,6 +189,19 @@ rule files such as `.cursorrules`:
   `.context-maintainer/cache/backups/`.
 - The result should be *cleaner* than the original, not merely longer.
 
+## Report the decision, every time
+
+After any piece of work that touched the repository, decide whether project
+reality changed — and **say which**. Either name what you updated, or state
+plainly that no context update was needed.
+
+This matters because a skipped check and a completed check look identical from
+outside. "No context update needed — this was a refactor within one component"
+is a useful sentence. Silence is not.
+
+Most work needs no update. Saying so is the correct outcome, not a failure to
+act. The change→document mapping is in `references/sync-policy.md`.
+
 ## Non-negotiables
 
 - **Evidence over convenience.** Never promote an assumption to a documented
