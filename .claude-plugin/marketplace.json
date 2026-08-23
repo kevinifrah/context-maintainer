@@ -1,0 +1,25 @@
+{
+  "name": "context-maintainer",
+  "owner": {
+    "name": "Context Maintainer Contributors"
+  },
+  "description": "Create and maintain durable project context in the repository itself so any coding agent can quickly understand a project.",
+  "plugins": [
+    {
+      "name": "context-maintainer",
+      "source": "./skill/context-maintainer",
+      "displayName": "Context Maintainer",
+      "description": "Create and maintain durable project context in the repository itself so any coding agent can quickly understand a project.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "keywords": [
+        "context",
+        "documentation",
+        "onboarding",
+        "architecture",
+        "agents"
+      ],
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -18,8 +18,14 @@ dev = ["pytest>=7"]
 [project.scripts]
 context-maintainer = "context_maintainer.cli:main"
 
+# The package lives inside the plugin directory on purpose: both Claude Code
+# and Codex copy only the plugin subdirectory when installing a plugin, so a
+# package outside it would be missing on the user's machine. Keeping it here
+# means one canonical copy that works for pip installs, symlinked checkouts,
+# and marketplace plugin installs alike.
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["skill/context-maintainer"]
+include = ["context_maintainer*"]
 
 [tool.setuptools.package-data]
 context_maintainer = ["templates/*"]

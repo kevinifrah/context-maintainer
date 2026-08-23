@@ -1,0 +1,20 @@
+{
+  "name": "context-maintainer",
+  "interface": {
+    "displayName": "Context Maintainer"
+  },
+  "plugins": [
+    {
+      "name": "context-maintainer",
+      "source": {
+        "source": "local",
+        "path": "./skill/context-maintainer"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

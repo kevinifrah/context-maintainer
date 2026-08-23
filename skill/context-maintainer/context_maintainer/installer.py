@@ -130,11 +130,26 @@ def find_canonical_skill_source(start: Optional[Path] = None) -> Path:
     )
 
 
-def target_paths(home: Path) -> List[Target]:
+def target_paths(home: Path, hosts: Optional[Sequence[str]] = None) -> List[Target]:
+    """Install targets, optionally narrowed to specific hosts.
+
+    Installing for one host only is a first-class case: plenty of people use
+    just Claude Code or just Codex.
+    """
     home = Path(home)
+    selected = set(hosts) if hosts else None
+    if selected:
+        known = {host for host, _ in HOST_SKILL_DIRS}
+        unknown = selected - known
+        if unknown:
+            raise InstallerError(
+                f"Unknown host(s): {', '.join(sorted(unknown))}. "
+                f"Choose from: {', '.join(sorted(known))}."
+            )
     return [
         Target(host=host, path=home / reldir / CANONICAL_SKILL_DIRNAME)
         for host, reldir in HOST_SKILL_DIRS
+        if selected is None or host in selected
     ]
 
 
@@ -187,6 +202,7 @@ def install(
     canonical: Optional[Path] = None,
     force: bool = False,
     dry_run: bool = False,
+    hosts: Optional[Sequence[str]] = None,
 ) -> Report:
     home = Path(home) if home is not None else Path.home()
     canonical_path = (
@@ -194,7 +210,7 @@ def install(
     )
     report = Report(canonical=str(canonical_path), dry_run=dry_run)
 
-    for target in target_paths(home):
+    for target in target_paths(home, hosts):
         conflict = detect_conflict(target.path, canonical_path)
 
         if conflict.kind == CORRECT_SYMLINK:
@@ -271,6 +287,7 @@ def uninstall(
     canonical: Optional[Path] = None,
     force: bool = False,
     dry_run: bool = False,
+    hosts: Optional[Sequence[str]] = None,
 ) -> Report:
     home = Path(home) if home is not None else Path.home()
     try:
@@ -282,7 +299,7 @@ def uninstall(
         canonical_path = Path("/nonexistent-canonical")
     report = Report(canonical=str(canonical_path), dry_run=dry_run)
 
-    for target in target_paths(home):
+    for target in target_paths(home, hosts):
         conflict = detect_conflict(target.path, canonical_path)
 
         if conflict.kind == ABSENT:
@@ -348,7 +365,11 @@ def uninstall(
     return report
 
 
-def status(home: Optional[Path] = None, canonical: Optional[Path] = None) -> Report:
+def status(
+    home: Optional[Path] = None,
+    canonical: Optional[Path] = None,
+    hosts: Optional[Sequence[str]] = None,
+) -> Report:
     """Report installation state without touching anything."""
     home = Path(home) if home is not None else Path.home()
     try:
@@ -358,7 +379,7 @@ def status(home: Optional[Path] = None, canonical: Optional[Path] = None) -> Rep
     except InstallerError:
         canonical_path = Path("/nonexistent-canonical")
     report = Report(canonical=str(canonical_path), dry_run=True)
-    for target in target_paths(home):
+    for target in target_paths(home, hosts):
         conflict = detect_conflict(target.path, canonical_path)
         report.actions.append(
             Action(target.host, str(target.path), conflict.kind, conflict.detail)
@@ -417,6 +438,20 @@ def _build_bootstrap_parser(action: str) -> argparse.ArgumentParser:
         default=None,
         help="Override the canonical skill directory (for testing).",
     )
+    parser.add_argument(
+        "--claude",
+        dest="hosts",
+        action="append_const",
+        const="claude",
+        help="Act on Claude Code only (default: both hosts).",
+    )
+    parser.add_argument(
+        "--codex",
+        dest="hosts",
+        action="append_const",
+        const="codex",
+        help="Act on Codex only (default: both hosts).",
+    )
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -432,6 +467,7 @@ def _run_bootstrap(action: str, argv: Optional[Sequence[str]]) -> int:
             canonical=args.canonical,
             force=args.force,
             dry_run=args.dry_run,
+            hosts=args.hosts,
         )
     except InstallerError as exc:
         if args.json:

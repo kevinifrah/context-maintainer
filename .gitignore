@@ -9,3 +9,6 @@ build/
 .coverage
 *.log
 .DS_Store
+
+# pip editable-install metadata (lands next to the package)
+skill/context-maintainer/context_maintainer.egg-info/

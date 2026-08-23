@@ -4,9 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-280%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-320%20passing-brightgreen.svg)](#testing)
 
-> **Status: v0.1.0, early release.** The deterministic layer is well tested (280 automated tests). The parts that depend on a live coding agent — the actual quality of generated context — need real-world use to prove out. See [Limitations](#limitations).
+> **Status: v0.1.0, early release.** The deterministic layer is well tested (320 automated tests). The parts that depend on a live coding agent — the actual quality of generated context — need real-world use to prove out. See [Limitations](#limitations).
 
 ---
 
@@ -32,6 +32,8 @@
 - [Contributing](#contributing)
 - [Third-party dependencies and licenses](#third-party-dependencies-and-licenses)
 - [License](#license)
+
+**Also:** [docs/INSTALL.md](docs/INSTALL.md) — per-agent installation · [docs/TESTING.md](docs/TESTING.md) — end-to-end verification guide
 
 ---
 
@@ -90,31 +92,37 @@ The CLI never writes prose or interprets meaning. The skill never does by hand w
 
 ```
 context-maintainer/
-├── src/context_maintainer/        # the CLI (stdlib only, zero runtime deps)
-│   ├── cli.py                     # argument parsing and dispatch
-│   ├── repository.py              # repo root + blank/existing detection
-│   ├── gitutil.py                 # git wrapper (subprocess, no libraries)
-│   ├── manifest.py                # .context-maintainer/manifest.json
-│   ├── contract.py                # the contract, as data
-│   ├── mdsections.py              # markdown H2 parser
-│   ├── scaffold.py                # safe file creation and backups
-│   ├── briefing.py                # the `status` report
-│   ├── doctor.py                  # 17 deterministic health checks
-│   ├── repomix.py                 # staged evidence gathering
-│   ├── mcp_companion.py           # optional companion detection
-│   ├── installer.py               # symlink management
-│   ├── pluginspec.py              # both plugin manifests, as data
-│   └── templates/                 # the seven context templates
-├── skill/context-maintainer/      # the canonical skill (one copy, symlinked)
-│   ├── SKILL.md
+├── .claude-plugin/marketplace.json   # so the repo is its own plugin marketplace
+├── .agents/plugins/marketplace.json  # same, for Codex
+├── skill/context-maintainer/      # THE PLUGIN — self-contained, one canonical copy
+│   ├── SKILL.md                   # the skill (also serves plain-skill discovery)
 │   ├── references/                # audit protocol, evidence + sync policy…
-│   ├── scripts/cm.sh
+│   ├── scripts/cm.sh              # launcher: pip console script, else bundled package
 │   ├── .claude-plugin/plugin.json
 │   ├── .codex-plugin/plugin.json
-│   └── skills/context-maintainer/ # symlinks — Codex's expected layout
+│   ├── skills/context-maintainer/ # symlinks — Codex's expected plugin layout
+│   └── context_maintainer/        # the CLI (stdlib only, zero runtime deps)
+│       ├── cli.py                 # argument parsing and dispatch
+│       ├── repository.py          # repo root + blank/existing detection
+│       ├── gitutil.py             # git wrapper (subprocess, no libraries)
+│       ├── manifest.py            # .context-maintainer/manifest.json
+│       ├── contract.py            # the contract, as data
+│       ├── mdsections.py          # markdown H2 parser
+│       ├── scaffold.py            # safe file creation and backups
+│       ├── briefing.py            # the `status` report
+│       ├── doctor.py              # 17 deterministic health checks
+│       ├── repomix.py             # staged evidence gathering
+│       ├── mcp_companion.py       # optional companion detection
+│       ├── installer.py           # symlink management
+│       ├── pluginspec.py          # plugin + marketplace manifests, as data
+│       └── templates/             # the seven context templates
+├── scripts/install.sh             # one-command install from a checkout
 ├── installer/{install,uninstall}.py
-└── tests/                         # 280 tests, no network required
+├── docs/{INSTALL,TESTING}.md
+└── tests/                         # 320 tests, no network required
 ```
+
+The Python package sits **inside** the plugin directory deliberately: both Claude Code and Codex copy only the plugin subdirectory when installing a plugin, so a package outside it would simply be missing on a user's machine. One canonical copy serves pip installs, symlinked checkouts, and plugin installs alike — and a test asserts it stays there.
 
 ---
 
@@ -134,21 +142,38 @@ Nothing is installed on your behalf. Missing optional dependencies degrade capab
 
 ## Installation
 
+Full instructions, split by agent, are in **[docs/INSTALL.md](docs/INSTALL.md)**. The short version:
+
+### As a plugin — nothing to clone
+
+**Claude Code:**
+
+```
+/plugin marketplace add <owner>/<repo>
+/plugin install context-maintainer@context-maintainer
+```
+
+**Codex:**
+
+```bash
+codex plugin marketplace add <owner>/<repo> --ref main
+codex plugin add context-maintainer@context-maintainer
+```
+
+The Python CLI is bundled inside the plugin, so this needs no `pip install` and no other setup. Both hosts copy only the plugin directory when installing, which is exactly why the CLI lives inside it.
+
+### From a checkout — one command
+
 ```bash
 git clone <repository-url> context-maintainer
 cd context-maintainer
-
-# 1. Install the CLI (editable, so the skill and CLI stay in sync)
-pip install -e .
-
-# 2. See exactly what the installer would do — changes nothing
-python3 installer/install.py --dry-run
-
-# 3. Install the skill for Claude Code and Codex
-python3 installer/install.py
+./scripts/install.sh              # both hosts
+./scripts/install.sh --claude     # Claude Code only
+./scripts/install.sh --codex      # Codex only
+./scripts/install.sh --check      # dependency report, changes nothing
 ```
 
-That symlinks this checkout into both hosts:
+That checks dependencies, installs the `context-maintainer` CLI, and symlinks this checkout into whichever hosts you chose:
 
 ```
 ~/.claude/skills/context-maintainer   ->  <checkout>/skill/context-maintainer
@@ -157,7 +182,7 @@ That symlinks this checkout into both hosts:
 
 Symlinks rather than copies, on purpose: one canonical source, so `git pull` updates both hosts and no stale duplicate can drift.
 
-**Keep the checkout.** The symlinks point at it. If you move or delete it, run `python3 installer/install.py` again from the new location.
+**Keep the checkout** if you install this way — the symlinks point at it. If you move it, re-run the installer from the new location.
 
 ### Installer safety
 
@@ -461,7 +486,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-280 tests, no network access, no Node, and no real Repomix required — Repomix is exercised through a stub binary, and every installer test runs against a fake `$HOME` so your real `~/.claude` and `~/.agents` are never touched.
+320 tests, no network access, no Node, and no real Repomix required — Repomix is exercised through a stub binary, and every installer test runs against a fake `$HOME` so your real `~/.claude` and `~/.agents` are never touched.
 
 Coverage includes the blank/existing heuristic and its edge cases, Git behaviour (unborn HEAD, renames, deletions), manifest validation, scaffold safety, all 17 doctor checks, the Repomix wrapper and its degraded paths, installer conflict handling, skill and plugin packaging, and full end-to-end lifecycles against two realistic fixtures — one of which deliberately contains stale documentation contradicting its own code, so the "prefer the source" behaviour is actually tested rather than merely documented.
 

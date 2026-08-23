@@ -125,6 +125,20 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--json", action="store_true")
         sub.add_argument("--home", default=None, help=argparse.SUPPRESS)
         sub.add_argument("--canonical", default=None, help=argparse.SUPPRESS)
+        sub.add_argument(
+            "--claude",
+            dest="hosts",
+            action="append_const",
+            const="claude",
+            help="Act on Claude Code only (default: both hosts).",
+        )
+        sub.add_argument(
+            "--codex",
+            dest="hosts",
+            action="append_const",
+            const="codex",
+            help="Act on Codex only (default: both hosts).",
+        )
         if name != "status":
             sub.add_argument(
                 "--force",
@@ -498,7 +512,9 @@ def cmd_skill(args: argparse.Namespace) -> int:
 
     try:
         if args.skill_command == "status":
-            report = installer_mod.status(home=args.home, canonical=args.canonical)
+            report = installer_mod.status(
+                home=args.home, canonical=args.canonical, hosts=args.hosts
+            )
             verb = "Status"
         elif args.skill_command == "install":
             report = installer_mod.install(
@@ -506,6 +522,7 @@ def cmd_skill(args: argparse.Namespace) -> int:
                 canonical=args.canonical,
                 force=args.force,
                 dry_run=args.dry_run,
+                hosts=args.hosts,
             )
             verb = "Install"
         else:
@@ -514,6 +531,7 @@ def cmd_skill(args: argparse.Namespace) -> int:
                 canonical=args.canonical,
                 force=args.force,
                 dry_run=args.dry_run,
+                hosts=args.hosts,
             )
             verb = "Uninstall"
     except installer_mod.InstallerError as exc:
