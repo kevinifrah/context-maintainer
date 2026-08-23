@@ -2,11 +2,11 @@
 
 **Durable, evidence-based project context for Claude Code and Codex — stored in your repository, not in a database.**
 
+[![CI](https://github.com/kevinifrah/context-maintainer/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinifrah/context-maintainer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-320%20passing-brightgreen.svg)](#testing)
 
-> **Status: v0.1.0, early release.** The deterministic layer is well tested (320 automated tests). The parts that depend on a live coding agent — the actual quality of generated context — need real-world use to prove out. See [Limitations](#limitations).
+> **Status: v0.1.0, early release.** The deterministic layer is well tested (300+ automated tests, run on every push). The parts that depend on a live coding agent — the actual quality of generated context — need real-world use to prove out. See [Limitations](#limitations).
 
 ---
 
@@ -119,7 +119,7 @@ context-maintainer/
 ├── scripts/install.sh             # one-command install from a checkout
 ├── installer/{install,uninstall}.py
 ├── docs/{INSTALL,TESTING}.md
-└── tests/                         # 320 tests, no network required
+└── tests/                         # 300+ tests, no network required
 ```
 
 The Python package sits **inside** the plugin directory deliberately: both Claude Code and Codex copy only the plugin subdirectory when installing a plugin, so a package outside it would simply be missing on a user's machine. One canonical copy serves pip installs, symlinked checkouts, and plugin installs alike — and a test asserts it stays there.
@@ -486,7 +486,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-320 tests, no network access, no Node, and no real Repomix required — Repomix is exercised through a stub binary, and every installer test runs against a fake `$HOME` so your real `~/.claude` and `~/.agents` are never touched.
+300+ tests, no network access, no Node, and no real Repomix required — Repomix is exercised through a stub binary, and every installer test runs against a fake `$HOME` so your real `~/.claude` and `~/.agents` are never touched.
 
 Coverage includes the blank/existing heuristic and its edge cases, Git behaviour (unborn HEAD, renames, deletions), manifest validation, scaffold safety, all 17 doctor checks, the Repomix wrapper and its degraded paths, installer conflict handling, skill and plugin packaging, and full end-to-end lifecycles against two realistic fixtures — one of which deliberately contains stale documentation contradicting its own code, so the "prefer the source" behaviour is actually tested rather than merely documented.
 
@@ -568,6 +568,8 @@ Not promises — directions that seem sensible:
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, how to add a `doctor` check, and the project's design principles. Bug reports and feature requests go to [Issues](https://github.com/kevinifrah/context-maintainer/issues).
+
+Security issues — including a dependency that has become untrustworthy — are covered by [SECURITY.md](SECURITY.md).
 
 Two rules matter more than the rest:
 
