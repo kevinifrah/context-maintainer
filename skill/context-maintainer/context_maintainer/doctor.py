@@ -435,63 +435,94 @@ def check_mcp_language_server_configured(root: Path) -> CheckResult:
 
 
 def check_skill_installation(root: Path) -> CheckResult:
-    """Are the global skill symlinks present and pointing at this checkout?
+    """Is the skill available to each host, by *either* supported method?
 
-    Not being installed is a WARN, not a failure — the CLI works regardless,
-    and a project may deliberately use it without a global install.
+    There are two legitimate installations: a marketplace plugin install, and
+    the symlinks this project's installer creates. Checking only for symlinks
+    would report a perfectly working plugin install as missing.
+
+    Not being installed at all is a WARN, not a failure — the CLI works
+    regardless, and a project may deliberately use it without a global install.
     """
     from . import installer as installer_mod
 
+    plugin_installs = installer_mod.detect_plugin_installs()
+
+    # Symlink installs are only meaningful when run from a checkout.
+    canonical = None
     try:
         canonical = installer_mod.find_canonical_skill_source()
     except installer_mod.InstallerError:
-        return CheckResult(
-            "skill_installation",
-            PASS,
-            "Not run from a Context Maintainer checkout; skipping skill "
-            "installation checks.",
-        )
+        pass
 
+    via_plugin: List[str] = []
+    via_symlink: List[str] = []
     broken: List[str] = []
     missing: List[str] = []
-    installed: List[str] = []
 
-    for target in installer_mod.target_paths(Path.home()):
+    for host, _ in installer_mod.HOST_SKILL_DIRS:
+        versions = plugin_installs.get(host, [])
+        if versions:
+            unrunnable = [
+                v for v in versions if not installer_mod.plugin_install_is_runnable(v)
+            ]
+            if unrunnable and len(unrunnable) == len(versions):
+                broken.append(f"{host} (plugin install missing its bundled CLI)")
+            else:
+                via_plugin.append(host)
+            continue
+
+        if canonical is None:
+            missing.append(host)
+            continue
+
+        target = next(
+            t for t in installer_mod.target_paths(Path.home(), hosts=[host])
+        )
         conflict = installer_mod.detect_conflict(target.path, canonical)
         if conflict.kind == installer_mod.CORRECT_SYMLINK:
-            installed.append(target.host)
+            via_symlink.append(host)
         elif conflict.kind == installer_mod.ABSENT:
-            missing.append(target.host)
+            missing.append(host)
         else:
-            broken.append(f"{target.host} ({conflict.kind})")
+            broken.append(f"{host} ({conflict.kind})")
 
     if broken:
         return CheckResult(
             "skill_installation",
             FAIL,
-            "Skill path does not point at this checkout: " + ", ".join(broken),
-            "Run `context-maintainer skill install --force` to repair "
+            "Skill installation is broken for: " + ", ".join(broken),
+            "Reinstall the plugin, or run "
+            "`context-maintainer skill install --force` for a checkout install "
             "(existing content is backed up first).",
         )
-    if missing and not installed:
+
+    installed_summary = []
+    if via_plugin:
+        installed_summary.append(f"{', '.join(via_plugin)} (plugin)")
+    if via_symlink:
+        installed_summary.append(f"{', '.join(via_symlink)} (symlink)")
+
+    if missing and not installed_summary:
         return CheckResult(
             "skill_installation",
             WARN,
             "Skill is not installed for: " + ", ".join(missing),
-            "Run `context-maintainer skill install`.",
+            "Install the plugin (`/plugin install` or `codex plugin add`), or "
+            "run `context-maintainer skill install` from a checkout.",
         )
     if missing:
         return CheckResult(
             "skill_installation",
             WARN,
-            f"Skill installed for {', '.join(installed)} but not "
-            f"{', '.join(missing)}.",
-            "Run `context-maintainer skill install`.",
+            f"Skill installed for {'; '.join(installed_summary)}, "
+            f"but not for {', '.join(missing)}.",
+            "Install for the remaining host, if you use it.",
         )
     return CheckResult(
         "skill_installation",
         PASS,
-        f"Skill installed for {', '.join(installed)} and pointing at this checkout.",
+        "Skill installed for " + "; ".join(installed_summary) + ".",
     )
 
 

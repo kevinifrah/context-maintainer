@@ -153,6 +153,53 @@ def target_paths(home: Path, hosts: Optional[Sequence[str]] = None) -> List[Targ
     ]
 
 
+#: Where each host puts a plugin installed from a marketplace. A plugin install
+#: is a completely separate mechanism from the symlinks this installer creates,
+#: so anything reporting "installed" must look in both places.
+HOST_PLUGIN_CACHES = (
+    ("claude", ".claude/plugins/cache"),
+    ("codex", ".codex/plugins/cache"),
+)
+
+
+def detect_plugin_installs(
+    home: Optional[Path] = None, plugin_name: str = CANONICAL_SKILL_DIRNAME
+) -> Dict[str, List[str]]:
+    """Find marketplace-installed copies of the plugin, per host.
+
+    Returns {host: [version directories]}. A plugin install is authoritative on
+    its own — the symlinks are only one of two valid ways to install.
+    """
+    home = Path(home) if home is not None else Path.home()
+    found: Dict[str, List[str]] = {}
+
+    for host, relcache in HOST_PLUGIN_CACHES:
+        cache = home / relcache
+        if not cache.is_dir():
+            continue
+        hits: List[str] = []
+        # Layout: <cache>/<marketplace>/<plugin>/<version>/
+        for marketplace in sorted(cache.iterdir()):
+            if not marketplace.is_dir():
+                continue
+            plugin_dir = marketplace / plugin_name
+            if not plugin_dir.is_dir():
+                continue
+            for version in sorted(plugin_dir.iterdir()):
+                # A usable install has the skill and the bundled CLI.
+                if (version / "SKILL.md").is_file():
+                    hits.append(str(version))
+        if hits:
+            found[host] = hits
+    return found
+
+
+def plugin_install_is_runnable(version_dir: Path) -> bool:
+    """True when a plugin copy carries the CLI it needs to actually work."""
+    version_dir = Path(version_dir)
+    return (version_dir / "context_maintainer" / "cli.py").is_file()
+
+
 def detect_conflict(path: Path, canonical: Path) -> ConflictInfo:
     path = Path(path)
     if path.is_symlink():
