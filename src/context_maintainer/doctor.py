@@ -434,6 +434,93 @@ def check_mcp_language_server_configured(root: Path) -> CheckResult:
     )
 
 
+def check_skill_installation(root: Path) -> CheckResult:
+    """Are the global skill symlinks present and pointing at this checkout?
+
+    Not being installed is a WARN, not a failure — the CLI works regardless,
+    and a project may deliberately use it without a global install.
+    """
+    from . import installer as installer_mod
+
+    try:
+        canonical = installer_mod.find_canonical_skill_source()
+    except installer_mod.InstallerError:
+        return CheckResult(
+            "skill_installation",
+            PASS,
+            "Not run from a Context Maintainer checkout; skipping skill "
+            "installation checks.",
+        )
+
+    broken: List[str] = []
+    missing: List[str] = []
+    installed: List[str] = []
+
+    for target in installer_mod.target_paths(Path.home()):
+        conflict = installer_mod.detect_conflict(target.path, canonical)
+        if conflict.kind == installer_mod.CORRECT_SYMLINK:
+            installed.append(target.host)
+        elif conflict.kind == installer_mod.ABSENT:
+            missing.append(target.host)
+        else:
+            broken.append(f"{target.host} ({conflict.kind})")
+
+    if broken:
+        return CheckResult(
+            "skill_installation",
+            FAIL,
+            "Skill path does not point at this checkout: " + ", ".join(broken),
+            "Run `context-maintainer skill install --force` to repair "
+            "(existing content is backed up first).",
+        )
+    if missing and not installed:
+        return CheckResult(
+            "skill_installation",
+            WARN,
+            "Skill is not installed for: " + ", ".join(missing),
+            "Run `context-maintainer skill install`.",
+        )
+    if missing:
+        return CheckResult(
+            "skill_installation",
+            WARN,
+            f"Skill installed for {', '.join(installed)} but not "
+            f"{', '.join(missing)}.",
+            "Run `context-maintainer skill install`.",
+        )
+    return CheckResult(
+        "skill_installation",
+        PASS,
+        f"Skill installed for {', '.join(installed)} and pointing at this checkout.",
+    )
+
+
+def check_plugin_manifests_valid(root: Path) -> CheckResult:
+    """Both host manifests must stay valid and version-synced."""
+    from . import installer as installer_mod, pluginspec
+
+    try:
+        canonical = installer_mod.find_canonical_skill_source()
+    except installer_mod.InstallerError:
+        return CheckResult(
+            "plugin_manifests",
+            PASS,
+            "Not run from a Context Maintainer checkout; skipping manifest checks.",
+        )
+
+    problems = pluginspec.validate(canonical)
+    if problems:
+        return CheckResult(
+            "plugin_manifests",
+            FAIL,
+            "Plugin manifest problems: " + "; ".join(problems),
+            "Regenerate the manifests from pluginspec.py.",
+        )
+    return CheckResult(
+        "plugin_manifests", PASS, "Claude Code and Codex plugin manifests are valid."
+    )
+
+
 #: Ordered so the most fundamental failures are reported first.
 CHECKS: List[Callable[[Path], CheckResult]] = [
     check_manifest_exists_and_parses,
@@ -451,6 +538,8 @@ CHECKS: List[Callable[[Path], CheckResult]] = [
     check_referenced_paths_exist,
     check_repomix_available,
     check_mcp_language_server_configured,
+    check_skill_installation,
+    check_plugin_manifests_valid,
 ]
 
 

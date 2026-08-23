@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import __version__, briefing, contract, doctor, gitutil, manifest as manifest_mod
+from . import installer as installer_mod
 from . import mcp_companion, repomix as repomix_mod, repository, scaffold
 
 
@@ -110,6 +111,31 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Commits of log to include (default: {repomix_mod.DEFAULT_LOG_COUNT}).",
     )
     audit_parser.add_argument("--json", action="store_true")
+
+    skill_parser = subparsers.add_parser(
+        "skill", help="Manage the global skill installation for Claude Code and Codex."
+    )
+    skill_sub = skill_parser.add_subparsers(dest="skill_command")
+    for name, helptext in (
+        ("install", "Symlink the canonical skill into both hosts."),
+        ("uninstall", "Remove the skill symlinks."),
+        ("status", "Report installation state without changing anything."),
+    ):
+        sub = skill_sub.add_parser(name, help=helptext)
+        sub.add_argument("--json", action="store_true")
+        sub.add_argument("--home", default=None, help=argparse.SUPPRESS)
+        sub.add_argument("--canonical", default=None, help=argparse.SUPPRESS)
+        if name != "status":
+            sub.add_argument(
+                "--force",
+                action="store_true",
+                help="Replace unrelated content at a target path (backs it up first).",
+            )
+            sub.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Report what would happen and change nothing.",
+            )
 
     return parser
 
@@ -459,6 +485,45 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_skill(args: argparse.Namespace) -> int:
+    """Manage the global skill installation. Never touches project files."""
+    if not args.skill_command:
+        print(
+            "Specify a subcommand:\n"
+            "  context-maintainer skill install     symlink into Claude Code and Codex\n"
+            "  context-maintainer skill uninstall   remove those symlinks\n"
+            "  context-maintainer skill status      report current state"
+        )
+        return 1
+
+    try:
+        if args.skill_command == "status":
+            report = installer_mod.status(home=args.home, canonical=args.canonical)
+            verb = "Status"
+        elif args.skill_command == "install":
+            report = installer_mod.install(
+                home=args.home,
+                canonical=args.canonical,
+                force=args.force,
+                dry_run=args.dry_run,
+            )
+            verb = "Install"
+        else:
+            report = installer_mod.uninstall(
+                home=args.home,
+                canonical=args.canonical,
+                force=args.force,
+                dry_run=args.dry_run,
+            )
+            verb = "Uninstall"
+    except installer_mod.InstallerError as exc:
+        _emit({"ok": False, "error": str(exc)}, f"Error: {exc}", args.json)
+        return 1
+
+    _emit(report.to_dict(), installer_mod.render_text(report, verb), args.json)
+    return 0 if report.ok else 1
+
+
 _HANDLERS = {
     "init": cmd_init,
     "status": cmd_status,
@@ -466,6 +531,7 @@ _HANDLERS = {
     "doctor": cmd_doctor,
     "rebuild": cmd_rebuild,
     "audit": cmd_audit,
+    "skill": cmd_skill,
 }
 
 
