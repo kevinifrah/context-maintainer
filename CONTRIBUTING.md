@@ -6,7 +6,7 @@ project and, more importantly, the two design boundaries that keep it coherent.
 ## Development setup
 
 ```bash
-git clone <repository-url> context-maintainer
+git clone https://github.com/kevinifrahpro/context-maintainer.git context-maintainer
 cd context-maintainer
 
 python3 -m venv .venv

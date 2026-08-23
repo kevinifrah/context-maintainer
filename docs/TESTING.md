@@ -53,7 +53,7 @@ git log --oneline | head
 gh repo create context-maintainer --public --source=. --remote=origin --push
 
 # or:
-# git remote add origin https://github.com/<owner>/context-maintainer.git
+# git remote add origin https://github.com/kevinifrahpro/context-maintainer.git
 # git push -u origin main
 ```
 
@@ -91,14 +91,14 @@ what a stranger gets rather than your local state.
 Claude Code:
 
 ```
-/plugin marketplace add <owner>/context-maintainer
+/plugin marketplace add kevinifrahpro/context-maintainer
 /plugin install context-maintainer@context-maintainer
 ```
 
 Codex:
 
 ```bash
-codex plugin marketplace add <owner>/context-maintainer --ref main
+codex plugin marketplace add kevinifrahpro/context-maintainer --ref main
 codex plugin add context-maintainer@context-maintainer
 codex plugin list
 ```
@@ -110,7 +110,7 @@ codex plugin list
 
 ```bash
 cd /tmp
-git clone https://github.com/<owner>/context-maintainer.git
+git clone https://github.com/kevinifrahpro/context-maintainer.git
 cd context-maintainer
 ./scripts/install.sh --check      # dependencies only
 ./scripts/install.sh              # install for both hosts
