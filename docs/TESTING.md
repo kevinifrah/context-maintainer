@@ -92,14 +92,14 @@ Claude Code:
 
 ```
 /plugin marketplace add kevinifrah/context-maintainer
-/plugin install context-maintainer@context-maintainer
+/plugin install context-maintainer@kevinifrah
 ```
 
 Codex:
 
 ```bash
 codex plugin marketplace add kevinifrah/context-maintainer --ref main
-codex plugin add context-maintainer@context-maintainer
+codex plugin add context-maintainer@kevinifrah
 codex plugin list
 ```
 

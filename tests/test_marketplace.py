@@ -59,6 +59,55 @@ def test_codex_marketplace_has_required_schema_fields():
     assert entry["category"]
 
 
+def test_marketplace_name_differs_from_plugin_name():
+    """Avoids the `plugin@marketplace` stutter.
+
+    A marketplace is a container that can hold many plugins (real ones hold
+    hundreds, sourced from other repositories), so naming it after its single
+    current plugin would both read badly and mislead about its scope.
+    """
+    for path in (CLAUDE_MARKETPLACE, CODEX_MARKETPLACE):
+        data = _load(path)
+        assert data["name"] != data["plugins"][0]["name"], path
+
+
+def test_both_marketplaces_agree_on_the_marketplace_name():
+    assert _load(CLAUDE_MARKETPLACE)["name"] == _load(CODEX_MARKETPLACE)["name"]
+    assert _load(CLAUDE_MARKETPLACE)["name"] == pluginspec.MARKETPLACE_NAME
+
+
+def test_marketplace_name_is_a_valid_identifier():
+    """Kebab-case-ish: letters, digits, dot, underscore, hyphen; ≤128 chars."""
+    import re
+
+    name = pluginspec.MARKETPLACE_NAME
+    assert 0 < len(name) <= 128
+    assert re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name), name
+
+
+def test_marketplace_name_is_not_reserved():
+    """Impersonating an official marketplace is rejected by the validator."""
+    reserved = {
+        "claude-plugins-official",
+        "claude-community",
+        "anthropic-plugins",
+        "official-claude-plugins",
+        "org",
+        "org-provisioned",
+        "unknown",
+    }
+    assert pluginspec.MARKETPLACE_NAME.lower() not in reserved
+
+
+def test_documented_install_string_matches_the_manifests():
+    """The README must not tell users to type a name that does not exist."""
+    expected = f"{pluginspec.PLUGIN_NAME}@{pluginspec.MARKETPLACE_NAME}"
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    install_doc = (REPO_ROOT / "docs" / "INSTALL.md").read_text(encoding="utf-8")
+    assert expected in readme
+    assert expected in install_doc
+
+
 def test_marketplace_source_paths_are_relative_and_never_escape_the_repo():
     """`../` is forbidden in a plugin source path."""
     claude_source = _load(CLAUDE_MARKETPLACE)["plugins"][0]["source"]

@@ -20,6 +20,14 @@ from . import __version__
 PLUGIN_NAME = "context-maintainer"
 DISPLAY_NAME = "Context Maintainer"
 
+#: The marketplace is a container, named after its owner rather than its
+#: contents, so `context-maintainer@kevinifrah` reads cleanly and further
+#: plugins can be added as cross-repo entries instead of new marketplaces.
+#: Marketplace names are unique per user, not globally, and there is no
+#: rename-migration mechanism — so this should stay stable.
+MARKETPLACE_NAME = "kevinifrah"
+MARKETPLACE_DISPLAY_NAME = "Kevin Ifrah"
+
 CLAUDE_MANIFEST_RELPATH = ".claude-plugin/plugin.json"
 CODEX_MANIFEST_RELPATH = ".codex-plugin/plugin.json"
 
@@ -104,11 +112,11 @@ def codex_manifest(version: str = __version__) -> Dict[str, Any]:
 def claude_marketplace(version: str = __version__) -> Dict[str, Any]:
     """Claude Code marketplace manifest (repo root `.claude-plugin/`).
 
-    Lets a user run `/plugin marketplace add <owner>/<repo>` followed by
-    `/plugin install context-maintainer@context-maintainer`.
+    Lets a user run `/plugin marketplace add kevinifrah/context-maintainer`
+    followed by `/plugin install context-maintainer@kevinifrah`.
     """
     return {
-        "name": PLUGIN_NAME,
+        "name": MARKETPLACE_NAME,
         "owner": {"name": AUTHOR_NAME},
         "description": DESCRIPTION,
         "plugins": [
@@ -133,8 +141,8 @@ def codex_marketplace() -> Dict[str, Any]:
     entry uses a local source path relative to the marketplace root.
     """
     return {
-        "name": PLUGIN_NAME,
-        "interface": {"displayName": DISPLAY_NAME},
+        "name": MARKETPLACE_NAME,
+        "interface": {"displayName": MARKETPLACE_DISPLAY_NAME},
         "plugins": [
             {
                 "name": PLUGIN_NAME,

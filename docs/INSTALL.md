@@ -28,7 +28,7 @@ Inside Claude Code:
 
 ```
 /plugin marketplace add kevinifrah/context-maintainer
-/plugin install context-maintainer@context-maintainer
+/plugin install context-maintainer@kevinifrah
 ```
 
 The first command registers this repository as a plugin marketplace; the second
@@ -84,7 +84,7 @@ something it matches, e.g. *"set up project context for this repo"*.
 
 ```bash
 codex plugin marketplace add kevinifrah/context-maintainer --ref main
-codex plugin add context-maintainer@context-maintainer
+codex plugin add context-maintainer@kevinifrah
 codex plugin list
 ```
 

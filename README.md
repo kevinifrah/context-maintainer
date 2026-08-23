@@ -150,14 +150,14 @@ Full instructions, split by agent, are in **[docs/INSTALL.md](docs/INSTALL.md)**
 
 ```
 /plugin marketplace add kevinifrah/context-maintainer
-/plugin install context-maintainer@context-maintainer
+/plugin install context-maintainer@kevinifrah
 ```
 
 **Codex:**
 
 ```bash
 codex plugin marketplace add kevinifrah/context-maintainer --ref main
-codex plugin add context-maintainer@context-maintainer
+codex plugin add context-maintainer@kevinifrah
 ```
 
 The Python CLI is bundled inside the plugin, so this needs no `pip install` and no other setup. Both hosts copy only the plugin directory when installing, which is exactly why the CLI lives inside it.
