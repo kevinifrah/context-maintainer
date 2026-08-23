@@ -1,0 +1,162 @@
+---
+name: context-maintainer
+description: Create and maintain durable project context (docs/context/PROJECT.md, ARCHITECTURE.md, WORKFLOWS.md, STATE.md, DECISIONS.md plus AGENTS.md and CLAUDE.md) so any coding agent can quickly understand a project. Use for init, status, sync, doctor, and rebuild of a repository's context, and whenever project reality has changed enough that the recorded context is now wrong.
+license: MIT
+---
+
+# Context Maintainer
+
+Keep an accurate, compact, durable understanding of a software project in the
+repository itself, so Claude Code and Codex both start from the same truth.
+
+## Division of labour
+
+The `context-maintainer` CLI does everything mechanical. You do everything that
+needs judgment.
+
+| CLI (deterministic) | You (semantic) |
+| --- | --- |
+| Detect repo root, blank vs existing | Decide what the project *is* and why it exists |
+| Scaffold files, manage the manifest | Write the prose in each document |
+| List commits/files changed since checkpoint | Decide which of those changes actually matter |
+| Validate structure (`doctor`) | Grade evidence CONFIRMED / INFERRED / UNKNOWN |
+| Gather Repomix evidence (`audit`) | Read that evidence and synthesise a model |
+
+Never ask the CLI to reason. Never do by hand what the CLI already does.
+
+Run the CLI as `context-maintainer <command>`. If that is not on PATH, use
+`python3 -m context_maintainer <command>`, or `scripts/cm.sh <command>` from
+this skill directory. Add `--json` when you want structured output to reason
+over.
+
+## Before anything else
+
+Run `context-maintainer status --json`. It tells you whether the repository is
+initialized, what the context currently claims, and whether it is stale. Let
+that decide which command below applies.
+
+## init
+
+Establishes the context contract. Refuses to run twice — if already
+initialized, use `sync` or `rebuild` instead.
+
+1. `context-maintainer init --json`. It reports `mode` (blank or existing),
+   the detection `evidence`, files `created`, files `preserved`, and any
+   `existing_agent_files` it found.
+2. **If `mode` is `blank`:** gather what is genuinely missing, then write the
+   documents. Reuse anything the current conversation already told you. Ask
+   only about what you cannot infer — typically: what are we building, who is
+   it for, what problem does it solve, what must v1 do, known constraints.
+   Never ask a question the repository or conversation has already answered.
+3. **If `mode` is `existing`:** do not write documents yet. Follow
+   `references/audit-protocol.md` first, then write them from that evidence.
+4. **If `existing_agent_files` is non-empty:** migrate rather than replace.
+   See "Migrating existing instructions" below.
+5. Replace every `<!-- CONTEXT-MAINTAINER: PLACEHOLDER -->` marker with real
+   content, or an explicit, honest statement of what is unknown.
+6. Finish with `context-maintainer doctor` and fix what it reports.
+
+The structure is worthless until the content is real. `init` is not done when
+the files exist; it is done when they are true.
+
+## status
+
+Read-only briefing, suitable for someone returning after weeks away.
+
+1. `context-maintainer status --json`.
+2. Read `docs/context/PROJECT.md` and `docs/context/STATE.md` for anything the
+   summary flattened.
+3. Report: goal, current phase, architecture in a sentence or two, current
+   objective, blockers, notable recent changes, whether context looks stale,
+   and the most sensible next actions.
+
+Change nothing. If the context is stale, say so and recommend `sync` — do not
+quietly fix it here.
+
+## sync
+
+Incremental maintenance. This is the command that runs most often, so it must
+stay cheap and must not churn the documents.
+
+1. `context-maintainer sync --json` — gives commits and files changed since the
+   recorded checkpoint, plus uncommitted work.
+2. Decide which documents, if any, those changes affect. Follow
+   `references/sync-policy.md`. Most changes affect nothing.
+3. Read a section before concluding it is unaffected. Do not diff prose from
+   memory.
+4. Edit only the sections that are genuinely now wrong. Leave everything else
+   byte-identical.
+5. `context-maintainer sync --finalize` to advance the checkpoint.
+6. `context-maintainer doctor` to confirm you left the contract valid.
+
+Never re-scan the whole repository during `sync`. If a change is large enough
+that incremental reasoning fails, say so and recommend `rebuild`.
+
+## doctor
+
+1. `context-maintainer doctor --json`.
+2. Report PASS / WARN / FAIL per check, with the remediation the CLI supplies.
+3. Fix only what the user asks you to fix. `doctor` diagnoses; it does not
+   silently repair.
+
+A WARN for a missing Repomix or MCP companion is not a defect — it means
+reduced capability, and you should say which.
+
+## rebuild
+
+The exceptional full re-audit: after a major pivot, a large migration, a
+contract version change, or when the first initialization was poor.
+
+1. `context-maintainer rebuild --prepare --json` — backs up every context file
+   first.
+2. Re-run the full audit in `references/audit-protocol.md` against current
+   evidence.
+3. Rewrite the documents from that evidence.
+4. **Preserve decision history.** Carry every meaningful entry in
+   `DECISIONS.md` forward. Mark what reality has overtaken as `Superseded` and
+   link the decision that replaced it. Never delete a decision because it is
+   no longer current.
+5. `context-maintainer rebuild --finalize`, then `doctor`.
+
+## Migrating existing instructions
+
+When a repository already has `AGENTS.md`, `CLAUDE.md`, nested agent files, or
+rule files such as `.cursorrules`:
+
+- Read them before touching them. `init` preserves them rather than
+  overwriting, and reports them to you.
+- Keep every instruction that still holds. Losing a real house rule is far
+  worse than leaving the file untidy.
+- Deduplicate: one rule, stated once, in the right place.
+- Cross-agent rules belong in root `AGENTS.md`. Genuinely Claude-specific
+  instructions stay in `CLAUDE.md`, below its first line.
+- `CLAUDE.md` must begin with `@AGENTS.md` — that import is what lets one set
+  of instructions serve both agents.
+- Back up before any destructive rewrite; the CLI writes backups under
+  `.context-maintainer/cache/backups/`.
+- The result should be *cleaner* than the original, not merely longer.
+
+## Non-negotiables
+
+- **Evidence over convenience.** Never promote an assumption to a documented
+  fact to make a document look finished. See `references/evidence-policy.md`.
+- **Current code beats stale documentation.** When a README and the source
+  disagree, the source wins and the discrepancy is worth a note.
+- **Never read secret values.** Recording that a mechanism exists is fine;
+  reading `.env` to see what is in it is not.
+- **`STATE.md` is a snapshot, not a log.** Overwrite it. History lives in Git.
+- **`AGENTS.md` is a router, not a knowledge base.** It links to
+  `docs/context/`; it does not restate it.
+- **Do not silently reverse a documented decision.** Record a new one that
+  supersedes it.
+- **Say when you are degraded.** If Repomix is unavailable or the audit was
+  partial, record reduced confidence in ARCHITECTURE.md's "Evidence Level"
+  section rather than implying completeness.
+
+## References
+
+- `references/context-contract.md` — every required file and section
+- `references/evidence-policy.md` — CONFIRMED / INFERRED / UNKNOWN
+- `references/audit-protocol.md` — the existing-project audit, step by step
+- `references/sync-policy.md` — which changes affect which documents
+- `references/mcp-companion.md` — the optional structural-analysis companion

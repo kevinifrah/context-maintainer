@@ -1,0 +1,35 @@
+{
+  "name": "context-maintainer",
+  "version": "0.1.0",
+  "description": "Create and maintain durable project context in the repository itself so any coding agent can quickly understand a project.",
+  "author": {
+    "name": "Context Maintainer Contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "documentation",
+    "onboarding",
+    "architecture",
+    "agents"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Context Maintainer",
+    "shortDescription": "Durable project context for Claude Code and Codex",
+    "longDescription": "Context Maintainer keeps a compact, evidence-based record of a project \u2014 its purpose, architecture, workflows, current state, and decisions \u2014 in version-controlled Markdown under docs/context/. Claude Code and Codex both read the same files, so understanding survives new sessions, context compaction, and switching between agents. Supports init, status, sync, doctor, and rebuild.",
+    "developerName": "Context Maintainer Contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Initialize durable project context for this repository",
+      "Give me a status briefing on this project",
+      "Sync the project context after my recent changes"
+    ],
+    "screenshots": []
+  }
+}

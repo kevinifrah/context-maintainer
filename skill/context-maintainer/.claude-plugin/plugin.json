@@ -1,0 +1,8 @@
+{
+  "name": "context-maintainer",
+  "version": "0.1.0",
+  "description": "Create and maintain durable project context in the repository itself so any coding agent can quickly understand a project.",
+  "author": {
+    "name": "Context Maintainer Contributors"
+  }
+}
