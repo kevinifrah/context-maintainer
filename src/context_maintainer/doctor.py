@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from . import contract, gitutil, manifest as manifest_mod, mdsections
+from . import contract, gitutil, manifest as manifest_mod, mcp_companion, mdsections
+from . import repomix as repomix_mod
 
 PASS = "PASS"
 WARN = "WARN"
@@ -392,6 +393,47 @@ def check_referenced_paths_exist(root: Path) -> CheckResult:
     return CheckResult("referenced_paths", PASS, "All relative links resolve.")
 
 
+def check_repomix_available(root: Path) -> CheckResult:
+    """Repomix powers the audit passes; missing it degrades, never breaks."""
+    version = repomix_mod.get_repomix_version()
+    if version:
+        return CheckResult(
+            "repomix_available", PASS, f"Repomix {version} is available."
+        )
+    if repomix_mod.is_repomix_available():
+        return CheckResult(
+            "repomix_available",
+            WARN,
+            "Repomix is on PATH but did not report a version.",
+            "Check that `repomix --version` works.",
+        )
+    return CheckResult(
+        "repomix_available",
+        WARN,
+        "Repomix is not installed — repository audits run in degraded mode.",
+        repomix_mod.INSTALL_HINT,
+    )
+
+
+def check_mcp_language_server_configured(root: Path) -> CheckResult:
+    """Informational only: the companion is optional by design."""
+    status = mcp_companion.detect(root)
+    if status.configured:
+        where = ", ".join(status.locations)
+        names = ", ".join(status.server_names) if status.server_names else "unnamed"
+        return CheckResult(
+            "mcp_language_server",
+            PASS,
+            f"mcp-language-server configured ({names}) via {where}.",
+        )
+    return CheckResult(
+        "mcp_language_server",
+        PASS,
+        "mcp-language-server is not configured (optional). Structural analysis "
+        "will rely on Repomix, Git, and direct file reading.",
+    )
+
+
 #: Ordered so the most fundamental failures are reported first.
 CHECKS: List[Callable[[Path], CheckResult]] = [
     check_manifest_exists_and_parses,
@@ -407,6 +449,8 @@ CHECKS: List[Callable[[Path], CheckResult]] = [
     check_context_files_not_oversized,
     check_no_duplicated_instructions,
     check_referenced_paths_exist,
+    check_repomix_available,
+    check_mcp_language_server_configured,
 ]
 
 

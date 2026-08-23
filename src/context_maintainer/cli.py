@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import __version__, briefing, contract, doctor, gitutil, manifest as manifest_mod
-from . import repository, scaffold
+from . import mcp_companion, repomix as repomix_mod, repository, scaffold
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,6 +82,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rebuild_parser.add_argument("--json", action="store_true")
 
+    audit_parser = subparsers.add_parser(
+        "audit",
+        help="Gather raw repository evidence into the ignored cache (never edits context).",
+    )
+    audit_mode = audit_parser.add_mutually_exclusive_group()
+    audit_mode.add_argument(
+        "--structure-only",
+        action="store_true",
+        help="Cheap metadata/structure pass only (default).",
+    )
+    audit_mode.add_argument(
+        "--full",
+        action="store_true",
+        help="Fuller pass including compressed sources, git logs, and diffs.",
+    )
+    audit_parser.add_argument(
+        "--no-logs", action="store_true", help="Omit git logs from a full pass."
+    )
+    audit_parser.add_argument(
+        "--no-diffs", action="store_true", help="Omit git diffs from a full pass."
+    )
+    audit_parser.add_argument(
+        "--log-count",
+        type=int,
+        default=repomix_mod.DEFAULT_LOG_COUNT,
+        help=f"Commits of log to include (default: {repomix_mod.DEFAULT_LOG_COUNT}).",
+    )
+    audit_parser.add_argument("--json", action="store_true")
+
     return parser
 
 
@@ -121,8 +150,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     result = scaffold.write_contract_files(root, project_name=root.name)
 
     loaded = manifest_mod.default_manifest(
-        mode=classification.mode, commit=repo.head_commit
+        mode=classification.mode,
+        commit=repo.head_commit,
+        repomix_version=repomix_mod.get_repomix_version(),
     )
+    loaded.mcp_language_server_configured = mcp_companion.detect(root).configured
     manifest_mod.save_manifest(loaded, root / contract.MANIFEST_PATH)
 
     payload = {
@@ -367,12 +399,73 @@ def cmd_rebuild(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Gather raw evidence for the skill to read. Writes only to the cache."""
+    root = _resolve_root()
+    scaffold.ensure_cache_gitignore(root)
+
+    if args.full:
+        result = repomix_mod.run_full_pass(
+            root,
+            include_logs=not args.no_logs,
+            log_count=args.log_count,
+            include_diffs=not args.no_diffs,
+        )
+    else:
+        result = repomix_mod.run_structure_pass(root)
+
+    companion = mcp_companion.detect(root)
+    payload = {
+        "ok": True,
+        "repomix": result.to_dict(),
+        "mcp_language_server": companion.to_dict(),
+        "degraded_mode": result.degraded_mode,
+    }
+
+    lines = [f"Audit pass: {result.mode}"]
+    if result.succeeded:
+        lines.append(f"Evidence written to {result.output_path}")
+        if result.version:
+            lines.append(f"Repomix version: {result.version}")
+    else:
+        lines.append("DEGRADED MODE — structural evidence is incomplete.")
+        if result.note:
+            lines.append("")
+            lines.append(result.note)
+        if result.stderr:
+            lines.append("")
+            lines.append(f"Repomix stderr: {result.stderr[:800]}")
+
+    lines.append("")
+    if companion.configured:
+        lines.append(
+            "mcp-language-server is configured — use its tools "
+            f"({', '.join(mcp_companion.COMPANION_TOOLS)}) to confirm "
+            "call-graph and import claims."
+        )
+    else:
+        lines.append(
+            "mcp-language-server is not configured (optional); structural "
+            "claims rest on Repomix, Git, and direct reading."
+        )
+    if result.degraded_mode:
+        lines.append("")
+        lines.append(
+            "Do not describe the audit as complete. Record reduced confidence "
+            "in ARCHITECTURE.md's 'Evidence Level' section."
+        )
+
+    _emit(payload, "\n".join(lines), args.json)
+    return 0
+
+
 _HANDLERS = {
     "init": cmd_init,
     "status": cmd_status,
     "sync": cmd_sync,
     "doctor": cmd_doctor,
     "rebuild": cmd_rebuild,
+    "audit": cmd_audit,
 }
 
 
