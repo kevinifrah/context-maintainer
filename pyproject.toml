@@ -14,9 +14,9 @@ keywords = ["context", "documentation", "agents", "claude-code", "codex"]
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/kevinifrahpro/context-maintainer"
-Repository = "https://github.com/kevinifrahpro/context-maintainer"
-Issues = "https://github.com/kevinifrahpro/context-maintainer/issues"
+Homepage = "https://github.com/kevinifrah/context-maintainer"
+Repository = "https://github.com/kevinifrah/context-maintainer"
+Issues = "https://github.com/kevinifrah/context-maintainer/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

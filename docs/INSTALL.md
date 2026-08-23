@@ -27,7 +27,7 @@ required.
 Inside Claude Code:
 
 ```
-/plugin marketplace add kevinifrahpro/context-maintainer
+/plugin marketplace add kevinifrah/context-maintainer
 /plugin install context-maintainer@context-maintainer
 ```
 
@@ -43,12 +43,12 @@ Then restart your session and check it's there:
 
 > **If `owner/repo` shorthand fails**, Claude Code clones over SSH by default.
 > Either set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` in your environment, or pass a
-> full URL: `/plugin marketplace add https://github.com/kevinifrahpro/context-maintainer.git`
+> full URL: `/plugin marketplace add https://github.com/kevinifrah/context-maintainer.git`
 
 ### Option B — checkout install
 
 ```bash
-git clone https://github.com/kevinifrahpro/context-maintainer.git context-maintainer
+git clone https://github.com/kevinifrah/context-maintainer.git context-maintainer
 cd context-maintainer
 ./scripts/install.sh --claude
 ```
@@ -83,7 +83,7 @@ something it matches, e.g. *"set up project context for this repo"*.
 ### Option A — plugin install
 
 ```bash
-codex plugin marketplace add kevinifrahpro/context-maintainer --ref main
+codex plugin marketplace add kevinifrah/context-maintainer --ref main
 codex plugin add context-maintainer@context-maintainer
 codex plugin list
 ```
@@ -91,7 +91,7 @@ codex plugin list
 ### Option B — checkout install
 
 ```bash
-git clone https://github.com/kevinifrahpro/context-maintainer.git context-maintainer
+git clone https://github.com/kevinifrah/context-maintainer.git context-maintainer
 cd context-maintainer
 ./scripts/install.sh --codex
 ```
@@ -114,7 +114,7 @@ $context-maintainer init
 ## Both agents at once
 
 ```bash
-git clone https://github.com/kevinifrahpro/context-maintainer.git context-maintainer
+git clone https://github.com/kevinifrah/context-maintainer.git context-maintainer
 cd context-maintainer
 ./scripts/install.sh
 ```

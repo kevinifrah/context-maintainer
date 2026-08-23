@@ -149,14 +149,14 @@ Full instructions, split by agent, are in **[docs/INSTALL.md](docs/INSTALL.md)**
 **Claude Code:**
 
 ```
-/plugin marketplace add kevinifrahpro/context-maintainer
+/plugin marketplace add kevinifrah/context-maintainer
 /plugin install context-maintainer@context-maintainer
 ```
 
 **Codex:**
 
 ```bash
-codex plugin marketplace add kevinifrahpro/context-maintainer --ref main
+codex plugin marketplace add kevinifrah/context-maintainer --ref main
 codex plugin add context-maintainer@context-maintainer
 ```
 
@@ -165,7 +165,7 @@ The Python CLI is bundled inside the plugin, so this needs no `pip install` and 
 ### From a checkout — one command
 
 ```bash
-git clone https://github.com/kevinifrahpro/context-maintainer.git context-maintainer
+git clone https://github.com/kevinifrah/context-maintainer.git context-maintainer
 cd context-maintainer
 ./scripts/install.sh              # both hosts
 ./scripts/install.sh --claude     # Claude Code only
@@ -567,7 +567,7 @@ Not promises — directions that seem sensible:
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, how to add a `doctor` check, and the project's design principles. Bug reports and feature requests go to [Issues](https://github.com/kevinifrahpro/context-maintainer/issues).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, how to add a `doctor` check, and the project's design principles. Bug reports and feature requests go to [Issues](https://github.com/kevinifrah/context-maintainer/issues).
 
 Two rules matter more than the rest:
 
