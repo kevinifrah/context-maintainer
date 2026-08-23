@@ -1,0 +1,29 @@
+# Decisions
+
+Durable, ADR-style record of decisions worth preserving. Do not manufacture
+historical decisions that can't be supported by evidence — label inferred
+ones explicitly. Never delete a superseded decision; mark it `Superseded` and
+link to the decision that replaced it.
+
+## DEC-001: Adopted the Context Maintainer contract
+
+Status: Accepted
+
+Decision: Use Context Maintainer's standard context contract (`AGENTS.md`,
+`CLAUDE.md`, `docs/context/{PROJECT,ARCHITECTURE,WORKFLOWS,STATE,DECISIONS}.md`,
+`.context-maintainer/manifest.json`) as this project's durable source of truth.
+
+Why: Keep project understanding portable across sessions, context compaction,
+and different coding agents (Claude Code, Codex), without a proprietary
+memory store.
+
+Evidence/context: `context-maintainer init` was run to establish this
+structure.
+
+Alternatives considered: Ad hoc README notes; no durable context at all.
+
+Consequences: Coding agents are expected to read `docs/context/PROJECT.md`
+and `docs/context/STATE.md` before substantial work, and to run
+`context-maintainer sync` after meaningful changes.
+
+Date/commit if known: <!-- CONTEXT-MAINTAINER: PLACEHOLDER --> _not yet recorded_

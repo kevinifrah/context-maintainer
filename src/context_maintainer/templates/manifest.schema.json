@@ -1,0 +1,11 @@
+{
+  "$comment": "Documentation-only shape reference for .context-maintainer/manifest.json. Not enforced via a jsonschema runtime dependency — see manifest.py for the actual hand-rolled validation logic.",
+  "schema_version": 1,
+  "mode": "blank | existing",
+  "initialized_at": "ISO-8601 timestamp string",
+  "last_synced_at": "ISO-8601 timestamp string, or null if never synced",
+  "last_verified_commit": "git commit SHA string, or null if the repo has no commits yet",
+  "context_maintainer_version": "semver string, matches the CLI's __version__ at last write",
+  "repomix_version": "string reported by `repomix --version`, or null if unavailable",
+  "mcp_language_server_configured": "bool, or null if never checked"
+}
