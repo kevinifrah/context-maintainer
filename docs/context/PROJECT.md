@@ -53,7 +53,7 @@ persona anywhere.
 - The judgment layer (the skill, running inside a live coding agent) produces
   context that is actually accurate and useful, not merely well-structured.
   The README states this explicitly has **not** yet been proven out: "Status:
-  v0.1.0, early release... The parts that depend on a live coding agent — the
+  v0.4.0, early release... The parts that depend on a live coding agent — the
   actual quality of generated context — need real-world use to prove out."
   CONFIRMED, and still the open question. The user confirmed (2026-08-24)
   that the next milestone is exactly this: real-world dogfooding to validate

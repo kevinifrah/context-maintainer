@@ -66,15 +66,47 @@ _HISTORICAL = (
     "replaced by", "before the migration", "legacy", "removed in", "dropped in",
 )
 
-#: Nouns that make a bare number a claim about the repository rather than a
-#: date, a version, or a threshold. Kept to a deliberately short list: a number
-#: is the single most drift-prone thing prose can contain, but "21 days" is a
-#: documented constant, not a measurement, and flagging it would be noise.
+#: Nouns that make a bare number a claim about the repository. This is now a
+#: *preference*, not a gate: it decides which word a finding names when several
+#: follow the number, so familiar findings keep reading the way they did. What
+#: a number must survive to be flagged is the three suppression lists below.
 _COUNTABLE_NOUNS = (
     "test", "tests", "check", "checks", "command", "commands", "module",
     "modules", "component", "components", "job", "jobs", "entry", "entries",
     "section", "sections", "file", "files", "dependency", "dependencies",
     "endpoint", "endpoints", "table", "tables", "service", "services",
+)
+
+#: Counts below this are prose, not measurements: "the 2 hosts" is a fact about
+#: the design, and nobody re-derives it. A count worth stating is rarely 1 or 2.
+_VOLATILE_NUMBER_FLOOR = 3
+
+#: Words that, straight after a number, make it a unit or a duration rather
+#: than a count of something in the repository. "21 days" is a documented
+#: constant; "443 tests" is a measurement that rots.
+_NUMBER_UNITS = (
+    "day", "days", "week", "weeks", "month", "months", "year", "years",
+    "hour", "hours", "minute", "minutes", "second", "seconds", "ms", "s",
+    "percent", "kb", "mb", "gb", "kib", "mib", "byte", "bytes", "chars",
+    "characters", "x", "times",
+)
+
+#: Words that, straight *before* a number, make it an identifier or a pointer
+#: rather than a quantity: "port 8080", "step 3", "issue 16430", "Python 3".
+_NUMBER_IDENTIFIERS = (
+    "port", "step", "issue", "pr", "figure", "chapter", "section", "version",
+    "python", "node", "ruby", "go", "rust", "java", "php", "item", "line",
+    "column", "page", "note", "table", "dec", "adr", "rfc", "http", "number",
+    "id", "no",
+)
+
+#: Words that, straight after a number, mean it is not quantifying anything —
+#: it is the subject of the sentence or a bare identifier. "8080 is used" is
+#: not a count; "415 passing" is.
+_NUMBER_NON_NOUNS = (
+    "is", "are", "was", "were", "has", "have", "had", "and", "or", "of", "in",
+    "on", "at", "to", "the", "a", "an", "that", "which", "but", "so", "if",
+    "as", "for", "from", "with", "by", "it", "this", "these", "those", "then",
 )
 
 #: Phrasings that assert something is *absent*. These rot in total silence:
@@ -612,22 +644,48 @@ def _detect_volatile_numbers(
     adding the 416th test edits the sentence that says there are 415. It stays
     informational while the code sits still, and becomes worth re-checking the
     moment it moves.
+
+    The rule is *flag unless benign*, not *flag if the noun is recognised*. An
+    allowlist of nouns cannot generalise past the vocabulary it was written
+    against, which is the failure DEC-006 exists to avoid — and it failed here
+    exactly that way, missing "415 passing" in ARCHITECTURE.md while catching
+    "443 tests" two documents away. The two errors are not symmetric: a
+    suppression this list is missing costs one extra line on a worklist that
+    never gates a build, while a noun it has never seen costs a claim that rots
+    in silence. So the closed list moved to the suppressing side, where being
+    incomplete is cheap and self-correcting.
     """
     findings: List[Finding] = []
     severity = WARN if (code_moved or not attested) else INFO
     for block in blocks:
         if block.is_historical:
             continue
+        lowered = block.text.lower()
         versions = {m.group(0) for m in _VERSION_TOKEN.finditer(block.text)}
-        for match in _NUMBER_NOUN.finditer(block.text.lower()):
+        for match in _NUMBER_NOUN.finditer(lowered):
             number = match.group(1)
             if any(number in version for version in versions):
                 continue
-            # The noun may sit a word or two past the number, behind markup.
-            following = _WORD.findall(match.group(2))[:3]
-            noun = next((w for w in following if w in _COUNTABLE_NOUNS), None)
-            if not noun:
+            try:
+                value = int(number.replace(",", ""))
+            except ValueError:  # pragma: no cover - the pattern guarantees digits
                 continue
+            if value < _VOLATILE_NUMBER_FLOOR:
+                continue
+            preceding = _WORD.findall(lowered[: match.start()])
+            if preceding and preceding[-1] in _NUMBER_IDENTIFIERS:
+                continue
+            # The noun may sit a word or two past the number, behind markup:
+            # "17 `doctor` checks" and "18 **deterministic** checks" both put
+            # something in between.
+            following = _WORD.findall(match.group(2))[:3]
+            if not following or following[0] in _NUMBER_UNITS:
+                continue
+            noun = next((w for w in following if w in _COUNTABLE_NOUNS), None)
+            if noun is None:
+                if following[0] in _NUMBER_NON_NOUNS:
+                    continue
+                noun = following[0]
             findings.append(
                 Finding(
                     VOLATILE_NUMBER, severity, block.source, block.section,

@@ -185,8 +185,9 @@ Confidence is otherwise high despite the degraded audit, because this
 project's own README and CONTRIBUTING.md are unusually thorough,
 self-describing, and specific (they document their own architecture,
 CONTRIBUTING.md documents the doctor-check and contract-change conventions),
-and the test suite (415 passing, run directly via `pytest -q` on 2026-08-24)
-corroborates the documented behavior rather than merely asserting it.
+and the test suite (run directly via `pytest -q`; the count lives in
+WORKFLOWS.md "Testing") corroborates the documented behavior rather than
+merely asserting it.
 Where a claim rests only on documentation without independent corroboration,
 it is marked INFERRED above; everything else cited to a specific file or
 command output is CONFIRMED.

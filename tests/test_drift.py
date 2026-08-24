@@ -212,6 +212,66 @@ def test_a_version_number_is_not_treated_as_a_count(git_repo: Path):
     assert not volatile, [f.to_dict() for f in volatile]
 
 
+@pytest.mark.parametrize(
+    "sentence, expected",
+    [
+        # The regression: an allowlist of nouns missed this one in this
+        # repository's own ARCHITECTURE.md while catching "443 tests" two
+        # documents away.
+        ("The test suite (415 passing, run directly) corroborates it.", "415 passing"),
+        # Vocabulary the tool was never written against. Every unfamiliar
+        # repository counts something in a word this list has not seen.
+        ("The suite has 443 specs covering the parser.", "443 specs"),
+        ("It registers 12 handlers on startup.", "12 handlers"),
+        ("The router exposes 27 routes.", "27 routes"),
+        # A noun it does recognise still names the finding the way it did
+        # before, even with markup and an adjective in the way.
+        ("There are 18 **deterministic** health checks.", "18 checks"),
+    ],
+)
+def test_a_count_is_flagged_whatever_noun_it_uses(
+    git_repo: Path, sentence: str, expected: str
+):
+    root = _project(git_repo)
+    _set_section(root, "Overview", sentence + " CONFIRMED by running it.")
+    commit_all(root, "State a count")
+
+    volatile = [
+        f for f in drift.analyse(root).findings if f.kind == drift.VOLATILE_NUMBER
+    ]
+    assert volatile, f"nothing flagged in: {sentence}"
+    assert expected in volatile[0].detail, volatile[0].detail
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        # Documented constants and thresholds, not measurements.
+        "STATE is re-confirmed after 21 days.",
+        "Notes are truncated at 300 characters.",
+        # Versions and dates carry their own units.
+        "Requires Python 3.9 or newer.",
+        "Released as v0.4.0 on 2026-08-24.",
+        "Coverage sits at 80% overall.",
+        # Identifiers, not quantities.
+        "The daemon listens on port 8080 in production.",
+        "Tracked upstream as issue 16430 for now.",
+        # Too small to be a measurement anyone re-derives.
+        "Both of the 2 hosts read the same files.",
+    ],
+)
+def test_a_number_that_is_not_a_count_is_left_alone(git_repo: Path, sentence: str):
+    """The precision side. Flagging these would make the worklist unworkable."""
+    root = _project(git_repo)
+    _set_section(root, "Overview", sentence + " CONFIRMED by reading the config.")
+    commit_all(root, "State a non-count number")
+
+    volatile = [
+        f for f in drift.analyse(root).findings if f.kind == drift.VOLATILE_NUMBER
+    ]
+    assert not volatile, [f.to_dict() for f in volatile]
+
+
 def test_a_claim_of_absence_is_flagged_for_rechecking(git_repo: Path):
     root = _project(git_repo)
     _set_section(root, "Integrations", "There is no message queue in this system.")
