@@ -1,11 +1,11 @@
 {
-  "context_maintainer_version": "0.4.0",
+  "context_maintainer_version": "0.5.0",
   "initialized_at": "2026-08-23T22:30:17+00:00",
-  "last_synced_at": "2026-08-24T08:43:58+00:00",
-  "last_verified_commit": "755588ee0b094093dc45b7e62d41026554ffb8bd",
+  "last_synced_at": "2026-08-24T09:50:26+00:00",
+  "last_verified_commit": "3c43465f3e0e22221a8fd1726a6c13563a3aec46",
   "mcp_language_server_configured": false,
   "mode": "existing",
   "repomix_version": null,
   "schema_version": 1,
-  "state_confirmed_at": "2026-08-24T08:43:58+00:00"
+  "state_confirmed_at": "2026-08-24T09:50:26+00:00"
 }
