@@ -91,9 +91,9 @@ v0.4.0 changed what "validate accuracy" now means. Accuracy has two failure
 modes and they need different evidence:
 
 - **Does the tooling catch drift it should?** Partly answered here.
-  Development of v0.4.0 was itself the first test: `review` found the stale
-  "415 tests" claim in three places and a stale "17 doctor checks" that its own
-  first regex missed, and the repository's dogfooding test caught a citation
+  Development of v0.4.0 was itself the first test: `review` found a stale test
+  count repeated in three documents, plus a stale `doctor` check count that its
+  own first regex missed, and the repository's dogfooding test caught a citation
   bug (newly added files are invisible to `git ls-files`) before it shipped.
   That is real evidence, but it is evidence from one repository that happens to
   be the tool's own.
