@@ -69,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument(
         "--strict", action="store_true", help="Treat WARN results as failing."
     )
+    doctor_parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Also check documented claims against repository evidence.",
+    )
 
     rebuild_parser = subparsers.add_parser(
         "rebuild",
@@ -337,6 +342,9 @@ def _finalize_checkpoint(
     updated = _changed_context_files(root, loaded.last_verified_commit)
 
     manifest_mod.update_checkpoint(loaded, target)
+    if any(p.endswith("STATE.md") for p in updated) or note:
+        # Confirming intent is what makes STATE trustworthy; record when.
+        loaded.state_confirmed_at = manifest_mod.utc_now()
     manifest_mod.save_manifest(loaded, root / contract.MANIFEST_PATH)
 
     logged = contextlog.append_entry(root, commit=target, files=updated, note=note)
@@ -452,7 +460,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = _resolve_root()
-    report = doctor.run_all_checks(root)
+    report = doctor.run_all_checks(root, verify=args.verify)
     _emit(report.to_dict(), doctor.render_text(report), args.json)
     return 1 if report.failed(strict=args.strict) else 0
 

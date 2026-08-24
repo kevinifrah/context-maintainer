@@ -18,3 +18,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
       - run: pytest -q
+
+  context-check:
+    # Dogfooding, and the enforcement half of the design: our own context
+    # documents must not contradict our own repository. --strict promotes
+    # WARN to failure, so a fabricated or drifted claim breaks the build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # doctor needs history to judge the checkpoint
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Verify context against the repository
+        run: context-maintainer doctor --verify --strict

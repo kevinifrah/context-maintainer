@@ -7,6 +7,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.3.0] — 2026-08-24
+
+The release that makes context *checkable* rather than merely well-formed.
+
+### Added
+- **`doctor --verify`** — the first check that looks at whether content is
+  true, not just whether it is structurally valid. Reads documented commands
+  from WORKFLOWS.md and technologies from ARCHITECTURE.md, then looks for
+  evidence: a marker file, a dependency entry, or source usage. Three verdicts,
+  and UNVERIFIED never fails, because a false positive costs more trust than a
+  missed claim. Historical statements ("previously", "migrated away") are exempt
+  by design, since recording migrations is something this tool asks for.
+- **Time-based staleness.** `manifest.json` (schema 2) records
+  `state_confirmed_at`, stamped when STATE.md is updated at `--finalize`. After
+  21 days `doctor` and the session hook ask for re-confirmation — catching the
+  case every other signal misses, where nothing changed and STATE quietly
+  became false anyway.
+- **`.context-maintainer/log.md`** — a capped, 20-entry record of what context
+  changed and why. The CLI supplies which files; `--note` supplies the reason.
+- **`docs/CI.md`** and a blocking `context-check` job in this repository's own
+  CI, so its context cannot silently drift.
+- Forward-looking triggers in the generated AGENTS.md: a new feature agreed, a
+  direction change, or something deferred all change project reality even when
+  no code has moved.
+
+### Changed
+- **`--strict` no longer promotes environmental warnings.** Repomix
+  availability, MCP companion presence, skill installation, checkpoint
+  freshness and state freshness are advisory: they are always warnings in CI
+  and say nothing about whether the documents are correct. Without this,
+  `--strict` was unusable for the enforcement it exists to provide.
+- Staleness ignores changes confined to context files, so a sync's own
+  bookkeeping no longer reports itself as drift.
+- An empty section written as "None. CONFIRMED (user, date)." is recognised as
+  empty, so `status` stopped inventing blockers.
+
+### Fixed
+- `doctor` reported a working marketplace plugin install as not installed.
+
 ## [0.2.0] — 2026-08-24
 
 ### Added

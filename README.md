@@ -34,7 +34,7 @@
 - [Third-party dependencies and licenses](#third-party-dependencies-and-licenses)
 - [License](#license)
 
-**Also:** [docs/INSTALL.md](docs/INSTALL.md) — per-agent installation · [docs/TESTING.md](docs/TESTING.md) — end-to-end verification guide
+**Also:** [docs/INSTALL.md](docs/INSTALL.md) — per-agent installation · [docs/TESTING.md](docs/TESTING.md) — end-to-end verification · [docs/CI.md](docs/CI.md) — enforcing context in CI
 
 ---
 
@@ -112,7 +112,7 @@ context-maintainer/
 │       ├── mdsections.py          # markdown H2 parser
 │       ├── scaffold.py            # safe file creation and backups
 │       ├── briefing.py            # the `status` report
-│       ├── doctor.py              # 17 deterministic health checks
+│       ├── doctor.py              # 18 deterministic health checks
 │       ├── repomix.py             # staged evidence gathering
 │       ├── mcp_companion.py       # optional companion detection
 │       ├── installer.py           # symlink management
@@ -287,6 +287,53 @@ context-maintainer sync --finalize --note "why"     # advance the checkpoint, lo
 
 Most changes update nothing. A CSS tweak touches no document; a new auth service updates ARCHITECTURE and STATE; a storage migration also updates DECISIONS. `sync` never re-scans the whole repository — that's what `rebuild` is for.
 
+### Verifying that context is *true*
+
+Every other check validates form — files present, sections present, no
+placeholders. That is orthogonal to accuracy: a completely fabricated
+`ARCHITECTURE.md` passes all of them.
+
+`--verify` checks claims against the repository:
+
+```bash
+context-maintainer doctor --verify
+```
+
+It reads documented commands from `WORKFLOWS.md` and technologies from
+`ARCHITECTURE.md`, then looks for corresponding evidence — a `Cargo.toml` behind
+a `cargo build` claim, a Postgres driver behind a Postgres claim, an `import` in
+source behind a standard-library claim.
+
+Three verdicts, and the middle one is the important one:
+
+| Verdict | Meaning |
+|---|---|
+| **CONFIRMED** | Evidence found |
+| **UNVERIFIED** | Named, but nothing to check against. Reported, **never** failed |
+| **CONTRADICTED** | Claimed as current, while the repository shows otherwise |
+
+Two deliberate guards, because a false positive costs more trust than a missed
+claim:
+
+- **History is exempt.** A line containing "previously", "migrated away", "no
+  longer", "superseded" is a statement about the past. Recording migrations is
+  something this tool actively asks for, so flagging them would be
+  self-defeating.
+- **Ignorance is not accusation.** With no recognisable ecosystem to compare
+  against, a claim is UNVERIFIED, never CONTRADICTED.
+
+Advisory by default (exit 0). `--strict` makes contradictions fail — see
+[docs/CI.md](docs/CI.md).
+
+### Time-based staleness
+
+Code-driven staleness misses the case where *nothing* changed. A project can sit
+untouched for a month while `STATE.md` still says "shipping next week".
+
+So `manifest.json` records `state_confirmed_at`, stamped whenever `STATE.md` is
+updated at `--finalize`. After 21 days, `doctor` and the session hook ask you to
+re-confirm — even with zero commits.
+
 ### The context update log
 
 `--finalize --note "..."` appends one short entry to
@@ -314,11 +361,12 @@ become a diary — the log exists so that rule can stay strict.
 
 ### `doctor`
 
-17 deterministic checks, no judgment involved: required files present, manifest present / parseable / schema-valid, `CLAUDE.md` → `AGENTS.md` bridge intact, required sections present, decision entries present, leftover placeholders, checkpoint valid, checkpoint not far behind HEAD, cache ignored, context files not absurdly large, `AGENTS.md` not duplicating the context documents, links resolving, Repomix available, MCP companion configured, skill installed correctly, plugin manifests valid.
+18 deterministic checks, no judgment involved: required files present, manifest present / parseable / schema-valid, `CLAUDE.md` → `AGENTS.md` bridge intact, required sections present, decision entries present, leftover placeholders, checkpoint valid, checkpoint not far behind HEAD, cache ignored, context files not absurdly large, `AGENTS.md` not duplicating the context documents, links resolving, Repomix available, MCP companion configured, skill installed correctly, plugin manifests valid.
 
 ```bash
 context-maintainer doctor
-context-maintainer doctor --strict   # treat warnings as failures (for CI)
+context-maintainer doctor --verify   # also check claims against the repository
+context-maintainer doctor --strict   # treat context warnings as failures (for CI)
 ```
 
 Exit code is 0 for PASS/WARN and 1 for FAIL. It reports and never repairs.
@@ -554,7 +602,7 @@ pytest -q
 
 300+ tests, no network access, no Node, and no real Repomix required — Repomix is exercised through a stub binary, and every installer test runs against a fake `$HOME` so your real `~/.claude` and `~/.agents` are never touched.
 
-Coverage includes the blank/existing heuristic and its edge cases, Git behaviour (unborn HEAD, renames, deletions), manifest validation, scaffold safety, all 17 doctor checks, the Repomix wrapper and its degraded paths, installer conflict handling, skill and plugin packaging, and full end-to-end lifecycles against two realistic fixtures — one of which deliberately contains stale documentation contradicting its own code, so the "prefer the source" behaviour is actually tested rather than merely documented.
+Coverage includes the blank/existing heuristic and its edge cases, Git behaviour (unborn HEAD, renames, deletions), manifest validation, scaffold safety, all 18 doctor checks, the Repomix wrapper and its degraded paths, installer conflict handling, skill and plugin packaging, and full end-to-end lifecycles against two realistic fixtures — one of which deliberately contains stale documentation contradicting its own code, so the "prefer the source" behaviour is actually tested rather than merely documented.
 
 ---
 

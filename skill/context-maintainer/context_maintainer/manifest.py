@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from . import __version__
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _REQUIRED_KEYS = ("schema_version", "mode", "initialized_at")
 _ALLOWED_KEYS = (
@@ -26,6 +26,9 @@ _ALLOWED_KEYS = (
     "context_maintainer_version",
     "repomix_version",
     "mcp_language_server_configured",
+    # v2: when STATE.md's intent fields were last confirmed. Separate from
+    # last_synced_at, which moves on every finalize even if STATE did not change.
+    "state_confirmed_at",
 )
 _VALID_MODES = ("blank", "existing")
 
@@ -44,6 +47,7 @@ class Manifest:
     context_maintainer_version: str = __version__
     repomix_version: Optional[str] = None
     mcp_language_server_configured: Optional[bool] = None
+    state_confirmed_at: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -103,6 +107,10 @@ def validate_manifest_dict(data: Any) -> List[str]:
     commit = data.get("last_verified_commit")
     if commit is not None and not isinstance(commit, str):
         problems.append("last_verified_commit must be a string or null")
+
+    confirmed = data.get("state_confirmed_at")
+    if confirmed is not None and not isinstance(confirmed, str):
+        problems.append("state_confirmed_at must be a string or null")
 
     configured = data.get("mcp_language_server_configured")
     if configured is not None and not isinstance(configured, bool):

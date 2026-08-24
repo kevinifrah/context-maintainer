@@ -22,6 +22,21 @@ _STALE_COMMIT_THRESHOLD = 10
 
 _LINK_PATTERN = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
+#: Warnings that describe the environment or ordinary drift rather than a defect
+#: in the context documents. `--strict` never promotes these, so a CI job can
+#: enforce document correctness without failing because a machine lacks an
+#: optional tool, or because a pull request is legitimately ahead of the last
+#: sync.
+ADVISORY_CHECKS = frozenset(
+    {
+        "repomix_available",
+        "mcp_language_server",
+        "skill_installation",
+        "checkpoint_freshness",
+        "state_freshness",
+    }
+)
+
 
 @dataclass
 class CheckResult:
@@ -52,9 +67,22 @@ class DoctorReport:
         return PASS
 
     def failed(self, strict: bool = False) -> bool:
+        """Should this report break a build?
+
+        `--strict` promotes warnings to failures, but only for warnings about
+        the *context* itself. Warnings about the surrounding environment —
+        whether Repomix happens to be installed, whether the skill is linked
+        into a host — are always true in CI and say nothing about whether the
+        documents are correct. Failing on those would make `--strict` useless
+        for enforcement, which is the one thing it exists for.
+        """
         if self.overall == FAIL:
             return True
-        return strict and self.overall == WARN
+        if not strict:
+            return False
+        return any(
+            r.status == WARN and r.name not in ADVISORY_CHECKS for r in self.results
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -552,6 +580,104 @@ def check_plugin_manifests_valid(root: Path) -> CheckResult:
     )
 
 
+#: How long STATE.md's intent fields may go unconfirmed before it is worth
+#: asking again. Intent decays on a calendar, not on a commit count — a
+#: project can sit untouched for a month and STATE still becomes wrong.
+STATE_MAX_AGE_DAYS = 21
+
+
+def check_state_freshness(root: Path) -> CheckResult:
+    """Has anyone confirmed what we are working on lately?
+
+    Every other staleness signal is triggered by code changing. This one fires
+    when nothing has changed — which is exactly when "Objective: shipping next
+    week" quietly becomes false.
+    """
+    path = root / contract.MANIFEST_PATH
+    if not path.exists():
+        return CheckResult("state_freshness", PASS, "Not applicable (not initialized).")
+    try:
+        loaded = manifest_mod.load_manifest(path)
+    except manifest_mod.ManifestError:
+        return CheckResult("state_freshness", PASS, "Not applicable (manifest invalid).")
+
+    confirmed = loaded.state_confirmed_at
+    if not confirmed:
+        return CheckResult(
+            "state_freshness",
+            WARN,
+            "STATE.md has never been explicitly confirmed.",
+            "Review docs/context/STATE.md, then run "
+            "`context-maintainer sync --finalize --note \"...\"` after updating it.",
+        )
+
+    from datetime import datetime, timezone
+
+    try:
+        stamp = datetime.fromisoformat(confirmed)
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return CheckResult(
+            "state_freshness", WARN, f"state_confirmed_at is unparseable: {confirmed!r}",
+            "Re-run `context-maintainer sync --finalize` to reset it.",
+        )
+
+    age_days = (datetime.now(timezone.utc) - stamp).days
+    if age_days > STATE_MAX_AGE_DAYS:
+        return CheckResult(
+            "state_freshness",
+            WARN,
+            f"STATE.md was last confirmed {age_days} days ago "
+            f"(threshold {STATE_MAX_AGE_DAYS}). Its Objective, In Progress, "
+            "Blockers and Next may no longer be true even though code has not "
+            "changed.",
+            "Review STATE.md and re-confirm it with "
+            "`context-maintainer sync --finalize --note \"...\"`.",
+        )
+    return CheckResult(
+        "state_freshness", PASS, f"STATE.md confirmed {age_days} day(s) ago."
+    )
+
+
+def check_claims_against_evidence(root: Path, strict: bool = False) -> CheckResult:
+    """Do the documents' claims survive contact with the repository?
+
+    Every other check validates form. This one is the only check that looks at
+    whether the content is *true*, so a fabricated ARCHITECTURE.md stops
+    passing silently.
+    """
+    from . import verify as verify_mod
+
+    claims = verify_mod.verify_all(root)
+    if not claims:
+        return CheckResult(
+            "claims_verified",
+            PASS,
+            "No mechanically checkable claims found (nothing to verify).",
+        )
+
+    counts = verify_mod.summarise(claims)
+    contradicted = [c for c in claims if c.status == verify_mod.CONTRADICTED]
+    summary = (
+        f"{counts[verify_mod.CONFIRMED]} confirmed, "
+        f"{counts[verify_mod.UNVERIFIED]} unverified, "
+        f"{counts[verify_mod.CONTRADICTED]} contradicted"
+    )
+
+    if contradicted:
+        details = "; ".join(f"{c.value} ({c.source}: {c.section})" for c in contradicted[:5])
+        return CheckResult(
+            "claims_verified",
+            WARN,
+            f"Context claims contradicted by the repository — {summary}. {details}",
+            "Either correct the document or, if the claim is right and the "
+            "evidence is simply not machine-visible, reword it so it is not "
+            "asserted as current fact.",
+        )
+    return CheckResult("claims_verified", PASS, f"Claims consistent with the repository — {summary}.")
+
+
 #: Ordered so the most fundamental failures are reported first.
 CHECKS: List[Callable[[Path], CheckResult]] = [
     check_manifest_exists_and_parses,
@@ -571,12 +697,22 @@ CHECKS: List[Callable[[Path], CheckResult]] = [
     check_mcp_language_server_configured,
     check_skill_installation,
     check_plugin_manifests_valid,
+    check_state_freshness,
 ]
 
 
-def run_all_checks(root: Path) -> DoctorReport:
+def run_all_checks(root: Path, verify: bool = False) -> DoctorReport:
+    """Run the structural checks, plus claim verification when asked.
+
+    Verification is opt-in because it is the only check that can be wrong about
+    a correct document — and a false positive that blocks work costs more trust
+    than a missed claim.
+    """
     root = Path(root)
-    return DoctorReport(results=[check(root) for check in CHECKS])
+    results = [check(root) for check in CHECKS]
+    if verify:
+        results.append(check_claims_against_evidence(root))
+    return DoctorReport(results=results)
 
 
 def render_text(report: DoctorReport) -> str:

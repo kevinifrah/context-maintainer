@@ -46,6 +46,12 @@ These do need an update:
 | Milestone finished, work started, blocker hit or cleared | STATE |
 | Product direction or scope changed | PROJECT, STATE |
 | A documented decision deliberately reversed | DECISIONS — supersede it, never delete |
+| **New feature or task agreed** | STATE (Next), and PROJECT (Scope) if it widens the remit |
+| **Direction or priority changed** | PROJECT, STATE |
+| **Something dropped or deferred** | STATE, and PROJECT (Non-Goals) if it is now out of scope |
+
+The last three matter as much as the first six: a decision about what to
+do next is a change to project reality even when no code moved yet.
 
 When one applies, run the Context Maintainer sync workflow
 (`context-maintainer sync`, or the `context-maintainer` skill) and update only
