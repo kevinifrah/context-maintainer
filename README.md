@@ -458,9 +458,12 @@ context-maintainer skill uninstall [--force] [--dry-run]
 ## Staying current automatically
 
 Context only helps if it is true, and remembering to run `sync` is exactly the
-kind of discipline that lapses. So the plugin ships a `SessionStart` hook.
+kind of discipline that lapses. So the plugin ships two hooks, at the two
+moments understanding goes missing: the start of a session, and compaction.
 
-When you open a project, it runs a read-only freshness check and — only if
+### At the start of a session
+
+When you open a project, a read-only freshness check runs and — only if
 something needs attention — tells the agent:
 
 ```
@@ -474,21 +477,49 @@ true.
 The agent then reads the context and can offer to sync before doing anything
 substantial, instead of trusting stale documents.
 
-Three deliberate constraints:
+### Before the context window compacts
+
+Compaction is the problem this tool exists for: a long session builds up an
+understanding of the project, and then most of it is summarised away. Whatever
+nobody wrote down is exactly what does not survive.
+
+So a `PreCompact` hook fires just before that happens, and — again, only when
+there is something to say — names what has not reached the documents yet:
+
+```
+Context Maintainer: this session is about to be compacted, and 7 uncommitted
+files; 2 documented claims resting on evidence that has since changed.
+Anything you have learned that is not written down will not survive. Before
+continuing, decide whether this work changed project reality — if it did, run
+the context-maintainer sync workflow now; if it did not, say so and carry on.
+Record any approach you tried and abandoned in docs/context/DECISIONS.md while
+you still remember why.
+```
+
+It ignores changes to `docs/context/` and `.context-maintainer/` when deciding
+whether to speak, so running a `sync` does not make the next compaction
+announce itself.
+
+Both hooks share three deliberate constraints:
 
 - **Silent unless it matters.** No notice in projects that never adopted
   Context Maintainer, and none when context is already current. A hook that
   speaks every time gets ignored.
 - **Never writes.** Detection only. The prose is still written by the agent,
   in session, where you can see and correct it.
-- **Never disrupts a session.** It always exits 0 — a broken environment,
+- **Never disrupts a session.** They always exit 0 — a broken environment,
   a corrupt manifest, or a missing interpreter produces silence, not an error.
+
+Both are verified on Claude Code. Codex plugin-local hooks may not execute yet
+([openai/codex#16430](https://github.com/openai/codex/issues/16430)).
 
 ### What it deliberately does not do
 
-There is no hook that rewrites your context unattended. A script could
-mechanically advance the checkpoint on every commit, but that would mark
-context as reviewed when nobody reviewed it — silently wrong documentation is
+There is no hook that rewrites your context unattended — including the
+`PreCompact` one, which is the most tempting place to automate. A script could
+mechanically advance the checkpoint on every commit, or re-stamp everything
+just before compaction, but that would mark context as reviewed when nobody
+reviewed it — silently wrong documentation is
 worse than visibly stale documentation. Deciding what a change *means* needs
 judgment, so it stays with the agent, in a session you can see.
 

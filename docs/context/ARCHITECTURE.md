@@ -61,13 +61,23 @@ Skill-side: `SKILL.md` (the only real copy; the one under
 test enforces this) plus `references/{audit-protocol,context-contract,
 evidence-policy,sync-policy,mcp-companion}.md`.
 
-Hook-side (added v0.2.0): `hooks/hooks.json` registers a single `SessionStart`
-hook, auto-discovered by both hosts from the plugin root. It runs
-`hooks/session-start.sh`, a thin wrapper over `cli.py`'s `hook session-start`
-subcommand, which prints a one-paragraph notice to stdout — added to the
-agent's context by both hosts — only when the project is initialized *and*
-either context is behind HEAD or placeholders remain. CONFIRMED by direct
-reading and by `tests/test_session_start_hook.py`.
+Hook-side: `hooks/hooks.json` registers two non-blocking hooks,
+auto-discovered by both hosts from the plugin root. Each runs a thin shell
+wrapper over a `cli.py` `hook` subcommand which prints a one-paragraph notice
+to stdout — added to the agent's context by both hosts — and each stays silent
+unless there is something to act on.
+
+- `SessionStart` (v0.2.0) → `hooks/session-start.sh` → `hook session-start`.
+  Speaks when the project is initialized *and* either context is behind HEAD or
+  placeholders remain.
+- `PreCompact` (v0.5.0) → `hooks/pre-compact.sh` → `hook pre-compact`. Speaks
+  when a session is about to be compacted with work it has not recorded:
+  uncommitted source files, commits past the checkpoint, or claims resting on
+  moved evidence. Changes under `docs/context/` and `.context-maintainer/` are
+  excluded, so a `sync` does not make the next compaction announce itself.
+
+Neither writes anything — see DEC-007. CONFIRMED by direct reading and by
+`tests/test_session_start_hook.py`, `tests/test_pre_compact_hook.py`.
 
 Deliberately absent: a `Stop` hook. Its only channel to the model is
 `decision: "block"`, which would interrupt every turn and risks a loop, so
@@ -159,8 +169,9 @@ CONFIRMED: README "The context contract", `contract.py`, `.gitignore`,
   see README's note on command names, since the plugin manifest makes this a
   namespaced plugin command).
 - Codex: `$context-maintainer`.
-- Host-invoked entry point (not user-facing): `hook session-start`, called by
-  the `SessionStart` hook via `hooks/session-start.sh`. Always exits 0.
+- Host-invoked entry points (not user-facing): `hook session-start` and
+  `hook pre-compact`, called by the `SessionStart` and `PreCompact` hooks via
+  `hooks/session-start.sh` and `hooks/pre-compact.sh`. Both always exit 0.
 - CI entry points, both in `.github/workflows/ci.yml`: a `test` job running
   `pytest -q` on Python 3.9 and 3.12, and a `context-check` job (added
   v0.3.0) that runs `context-maintainer doctor --verify --strict` — the

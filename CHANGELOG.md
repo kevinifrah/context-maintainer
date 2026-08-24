@@ -5,7 +5,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- A `PreCompact` hook. Compaction is the failure this project exists for, and
+  it was the one moment nothing watched: `SessionStart` catches context that
+  went stale between sessions, but nothing caught a session's own
+  understanding being summarised away. The hook names what has not reached the
+  documents yet — uncommitted source work, commits past the checkpoint, claims
+  resting on moved evidence — and stays silent otherwise. It never writes, for
+  the reason DEC-004 gave about mechanical re-stamping, which binds harder
+  mid-task: nothing is settled, so an automatic finalize would attest to prose
+  no human has seen. See DEC-007.
+- A convention for recording approaches that were **tried and abandoned**, in
+  the `Alternatives considered:` field of the decision for what shipped. Git
+  preserves what shipped, not what failed, so the next session rediscovers the
+  same wall. Gated behind three tests in `references/sync-policy.md` — actually
+  attempted, failed for a project-specific reason, someone would plausibly try
+  it again — so `DECISIONS.md` does not become a diary.
+
+### Fixed
+
+- `review` now flags a count regardless of the noun that follows it. It had
+  been missing `"415 passing"` in `ARCHITECTURE.md` while catching
+  `"443 tests"` in `WORKFLOWS.md`, leaving the two documents contradicting each
+  other — because a bare number only counted as a claim when the following word
+  appeared on a hand-written list. That is the closed-vocabulary failure DEC-006
+  exists to avoid, reintroduced inside the detector meant to escape it. The rule
+  is now *flag unless demonstrably not a count*: units, preceding identifiers,
+  following function words, versions, and values under 3 are suppressed. Higher
+  recall, lower precision, deliberately — a missed count rots in silence, while
+  an extra line on a worklist that never gates a build costs one sentence.
 
 ## [0.4.0] — 2026-08-24
 

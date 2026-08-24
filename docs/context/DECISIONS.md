@@ -231,3 +231,42 @@ entries describe the moment a decision was taken.
 
 Date/commit if known: 2026-08-24, v0.4.0
 
+## DEC-007: A `PreCompact` hook that informs, and never attests
+
+Status: Accepted
+
+Decision: Add a second host hook on the `PreCompact` event, which reports what
+this session has not yet written down — uncommitted source work, commits past
+the context checkpoint, claims resting on moved evidence — and asks the agent
+to decide. It never writes: no re-stamp, no checkpoint advance, no edit.
+
+Why: Compaction is the failure this project was built for, and it was the one
+moment nothing watched. `SessionStart` (DEC-004) catches context that went
+stale *between* sessions. Nothing caught a session's own understanding being
+summarised away — the point at which whatever nobody wrote down is lost, and
+the last point at which the agent still remembers enough to write it.
+
+Evidence/context: `skill/context-maintainer/hooks/pre-compact.sh`,
+`skill/context-maintainer/hooks/hooks.json`, `cli.pre_compact_notice`,
+`tests/test_pre_compact_hook.py`. CONFIRMED by running `context-maintainer
+hook pre-compact` against this repository in both the silent and speaking
+states.
+
+Alternatives considered: having the hook run `sync --finalize` itself, so
+nothing depends on the agent complying. Rejected for the reason DEC-004
+rejected a mechanical `post-commit` finalize — it marks context as reviewed
+when nobody reviewed it — which binds harder here, not more weakly: mid-task
+nothing is settled, so an automatic re-stamp would attest to prose no human
+has seen. Also considered emitting on every compaction regardless of state,
+and rejected on DEC-004's noise argument: a notice that always fires is a
+notice that gets skimmed at the compaction where it mattered.
+
+Consequences: Two hooks now share one contract — always exit 0, never write,
+stay silent unless something needs doing — and `hooks.json` is asserted to
+register no blocking event. The hook excludes `docs/context/` and
+`.context-maintainer/` from what counts as unrecorded work, so a `sync` does
+not make the next compaction announce itself. Verified on Claude Code only:
+Codex plugin-local hooks may not execute yet (openai/codex#16430), the same
+limitation `SessionStart` already carries.
+
+Date/commit if known: 2026-08-24

@@ -251,6 +251,13 @@ is a useful sentence. Silence is not.
 Most work needs no update. Saying so is the correct outcome, not a failure to
 act. The change→document mapping is in `references/sync-policy.md`.
 
+One thing is worth recording even when nothing else is: an approach you
+**tried and abandoned**. Git keeps what shipped, not what failed, so the next
+session rediscovers the same wall. Put it in the `Alternatives considered:`
+field of the decision for what you did ship — but only if it was genuinely
+attempted, failed for a reason particular to this project, and someone would
+plausibly try it again. `references/sync-policy.md` states those three tests.
+
 ## Non-negotiables
 
 - **Evidence over convenience.** Never promote an assumption to a documented

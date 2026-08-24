@@ -43,10 +43,14 @@ def test_hooks_json_is_valid_json_with_a_description():
     assert "hooks" in data
 
 
-def test_hooks_json_registers_only_session_start():
-    """Stop hooks can only inform by blocking, so they are deliberately absent."""
+def test_hooks_json_registers_no_blocking_events():
+    """`Stop` can only inform by blocking the turn, so it is deliberately absent.
+
+    See DEC-004: a per-turn prompt whose own default answer is "nothing needed"
+    trains agents to dismiss it. Both registered events inform without blocking.
+    """
     data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
-    assert list(data["hooks"]) == ["SessionStart"]
+    assert set(data["hooks"]) == {"SessionStart", "PreCompact"}
 
 
 def test_hook_command_uses_the_plugin_root_variable():

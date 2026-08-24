@@ -8,9 +8,11 @@ decisions live in DECISIONS.md.
 
 ## Phase
 
-v0.4.0 in the working tree, not yet tagged: drift detection and the `review`
-worklist are implemented, tested, and dogfooded on this repository. v0.3.0 is
-the newest released tag. CONFIRMED: `git tag`, `CHANGELOG.md` [0.4.0].
+v0.4.0 plus v0.5.0 work in the working tree, neither tagged. v0.4.0's drift
+detection and `review` worklist are implemented, tested, and dogfooded here;
+v0.5.0 adds a `PreCompact` hook and a convention for recording abandoned
+approaches. v0.3.0 is the newest released tag. CONFIRMED: `git tag`,
+`CHANGELOG.md`.
 
 ## Objective
 
@@ -52,6 +54,15 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
   Reported as DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE,
   VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED. `doctor --verify`
   fails on the unambiguous kinds only; the rest is worklist, not gate.
+- A `PreCompact` hook (v0.5.0): `hooks/pre-compact.sh` and `cli.py`'s `hook
+  pre-compact` report what a session has not written down — uncommitted source
+  work, commits past the checkpoint, claims on moved evidence — just before
+  the context window is summarised away. It informs and never writes, for the
+  reason DEC-004 gave and DEC-007 restates.
+- A convention for recording approaches that were tried and abandoned
+  (v0.5.0), in the `Alternatives considered:` field of the decision for what
+  shipped, gated behind three tests in `references/sync-policy.md` so
+  `DECISIONS.md` does not become a diary. Prose only — no CLI, no new store.
 - Time-based STATE staleness (v0.3.0): `manifest.json` records
   `state_confirmed_at`; after 21 days `doctor` and the session hook ask for
   re-confirmation even if nothing else changed.
@@ -74,8 +85,8 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
 
 ## In Progress
 
-v0.4.0 is written and green but not yet released: no tag, and the marketplace
-has not been updated. CONFIRMED: `git tag` shows v0.3.0 as newest.
+v0.4.0 and v0.5.0 are written and green but unreleased: no tag, and the
+marketplace has not been updated. CONFIRMED: `git tag` shows v0.3.0 as newest.
 
 ## Blockers
 
@@ -83,9 +94,9 @@ None. CONFIRMED (user, 2026-08-24).
 
 ## Next
 
-Release v0.4.0 (tag, marketplace update), then validate that generated context
-is *accurate* on projects other than this one — still the main unproven claim,
-and still the priority. CONFIRMED (user, 2026-08-24).
+Release the accumulated work (tag, marketplace update), then validate that
+generated context is *accurate* on projects other than this one — still the
+main unproven claim, and still the priority. CONFIRMED (user, 2026-08-24).
 
 v0.4.0 changed what "validate accuracy" now means. Accuracy has two failure
 modes and they need different evidence:
@@ -104,8 +115,16 @@ modes and they need different evidence:
 
 Specifically outstanding:
 - Drift detection has only ever run against this repository. Its false-positive
-  rate on unfamiliar prose is unmeasured, and the first draft produced 125 false
-  defects here before calibration — so the risk is real, not theoretical.
+  rate on unfamiliar prose is unmeasured, and an early draft produced a flood of
+  false defects here before calibration — so the risk is real, not theoretical.
+  Volatile-number detection was since inverted from an allowlist of nouns to a
+  list of suppressions, precisely because an allowlist cannot generalise past
+  the vocabulary it was written against; that trade raises recall and lowers
+  precision, and the precision cost has only been measured here (two added
+  findings, both real).
+- The `PreCompact` hook is verified by tests and by hand, but has never been
+  observed firing during a real compaction. That is the only check that proves
+  it is wired rather than merely correct.
 - A cold install by someone with no local checkout has never been exercised;
   every install so far happened on the machine holding the repository.
 - Codex plugin-local hooks may not execute yet (openai/codex#16430), so the

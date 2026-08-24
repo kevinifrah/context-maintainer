@@ -71,6 +71,7 @@ should leave no trace.
 | Blocker hit or cleared | STATE |
 | Product direction or scope change | PROJECT, STATE |
 | Documented approach deliberately reversed | DECISIONS (supersede, never delete) |
+| An approach was tried and abandoned | DECISIONS (before the reasoning is lost) |
 
 This table is guidance, not a lookup table to apply mechanically. A one-line
 change can be architecturally significant; a thousand-line change can be
@@ -94,6 +95,29 @@ Most syncs touch only this file, and it is a snapshot:
   link forward to the replacement.
 - Only record decisions worth preserving. A decision worth recording is one a
   future contributor would otherwise reverse by accident.
+
+### Approaches that were tried and abandoned
+
+Git preserves what shipped, not what failed. When a session spends its effort
+on approach A, hits a wall, and ships approach B, the diff shows only B — so
+the next person tries A again and rediscovers the wall.
+
+Record the abandoned approach in the `Alternatives considered:` field of the
+entry for what you did ship. That field covers both kinds: options weighed and
+rejected up front, and options actually attempted and abandoned. Say which.
+
+This is the one addition here that can quietly turn `DECISIONS.md` into a
+diary, so it is deliberately hard to qualify. Record an abandoned approach only
+when **all three** hold:
+
+1. **It was actually attempted**, not merely considered.
+2. **It failed for a reason that is a property of this project** — its
+   architecture, constraints, data, or dependencies. Not a typo, not a
+   transient error, not a misunderstanding corrected two turns later.
+3. **A competent person would plausibly try it again.** If nobody would, the
+   knowledge is worth nothing.
+
+Fails any one of them and it belongs in the commit message, not here.
 
 ## When incremental is not enough
 

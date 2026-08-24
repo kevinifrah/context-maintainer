@@ -49,6 +49,7 @@ These do need an update:
 | **New feature or task agreed** | STATE (Next), and PROJECT (Scope) if it widens the remit |
 | **Direction or priority changed** | PROJECT, STATE |
 | **Something dropped or deferred** | STATE, and PROJECT (Non-Goals) if it is now out of scope |
+| **An approach tried and abandoned** | DECISIONS (`Alternatives considered:`), before the reasoning is lost |
 
 The last three matter as much as the first six: a decision about what to
 do next is a change to project reality even when no code moved yet.

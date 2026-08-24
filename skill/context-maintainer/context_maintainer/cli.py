@@ -144,6 +144,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report stale or incomplete context when a project is opened.",
     )
     session_start.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    pre_compact = hook_sub.add_parser(
+        "pre-compact",
+        help="Remind the agent to record what this session learned, before "
+        "the context window is compacted away.",
+    )
+    pre_compact.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     skill_parser = subparsers.add_parser(
         "skill", help="Manage the global skill installation for Claude Code and Codex."
@@ -685,12 +691,106 @@ def session_start_notice(root: Path) -> Optional[str]:
     return notice
 
 
+#: Source paths whose movement is worth mentioning before compaction. Context
+#: documents and the tool's own bookkeeping are excluded: an agent that has
+#: just edited `docs/context/` does not need telling that context changed.
+_BOOKKEEPING_PREFIXES = ("docs/context/", ".context-maintainer/")
+
+
+def _substantive(paths) -> int:
+    """How many changed paths are project work rather than context bookkeeping."""
+    return len(
+        [p for p in paths if not any(p.startswith(x) for x in _BOOKKEEPING_PREFIXES)]
+    )
+
+
+def pre_compact_notice(root: Path) -> Optional[str]:
+    """The notice to inject just before the context window is compacted.
+
+    Compaction is the failure this project was built for: understanding assembled
+    over a long session is about to be summarised away, and whatever nobody wrote
+    down is precisely what does not survive. `SessionStart` catches context that
+    went stale between sessions; nothing caught the moment a session's own
+    knowledge was about to be lost. This does.
+
+    It never writes, and that is not an implementation detail. DEC-004 rejected a
+    `post-commit` hook running `sync --finalize` because it "would mark context as
+    reviewed when nobody reviewed it, and silently wrong documentation is worse
+    than visibly stale documentation". The reasoning binds harder here: the agent
+    is mid-task, nothing is settled, and an automatic re-stamp would attest to
+    prose no human has seen. This informs; the agent decides.
+    """
+    if not repository.is_initialized(root) or not gitutil.is_git_repo(root):
+        return None
+
+    outstanding = []
+
+    working = [path for _status, path in gitutil.get_working_tree_changes(root)]
+    uncommitted = _substantive(working)
+    if uncommitted:
+        outstanding.append(
+            f"{uncommitted} uncommitted file{'s' if uncommitted != 1 else ''}"
+        )
+
+    try:
+        checkpoint = manifest_mod.load_manifest(
+            root / contract.MANIFEST_PATH
+        ).last_verified_commit
+    except Exception:
+        checkpoint = None
+    if checkpoint and gitutil.commit_exists(root, checkpoint):
+        committed = _substantive(
+            path for _status, path in gitutil.get_changed_files_since(root, checkpoint)
+        )
+        if committed:
+            outstanding.append(
+                f"{committed} file{'s' if committed != 1 else ''} changed since "
+                "the context checkpoint"
+            )
+
+    try:
+        report = drift.analyse(root)
+        needing = len(report.defects) + len(
+            [f for f in report.findings if f.kind == drift.STALE_EVIDENCE]
+        )
+        if needing:
+            outstanding.append(
+                f"{needing} documented claim{'s' if needing != 1 else ''} resting "
+                "on evidence that has since changed"
+            )
+    except Exception:
+        pass
+
+    # Silence is the common case and has to stay that way. A notice that fires
+    # on every compaction is a notice that gets skimmed on the one where it
+    # mattered — the same reasoning that kept a per-turn `Stop` hook out of
+    # DEC-004.
+    if not outstanding:
+        return None
+
+    notice = (
+        "Context Maintainer: this session is about to be compacted, and "
+        + "; ".join(outstanding)
+        + ". Anything you have learned that is not written down will not "
+        "survive. Before continuing, decide whether this work changed project "
+        "reality — if it did, run the context-maintainer sync workflow now; if "
+        "it did not, say so and carry on. Record any approach you tried and "
+        "abandoned in docs/context/DECISIONS.md while you still remember why."
+    )
+    if len(notice) > MAX_HOOK_NOTICE_CHARS:
+        notice = notice[: MAX_HOOK_NOTICE_CHARS - 1].rstrip() + "…"
+    return notice
+
 def cmd_hook(args: argparse.Namespace) -> int:
     """Host-hook entry point. Never fails, never writes, never blocks."""
     try:
-        if args.hook_event != "session-start":
+        builder = {
+            "session-start": session_start_notice,
+            "pre-compact": pre_compact_notice,
+        }.get(args.hook_event)
+        if builder is None:
             return 0
-        notice = session_start_notice(_resolve_root())
+        notice = builder(_resolve_root())
         if notice:
             print(notice)
     except Exception:
