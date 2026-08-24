@@ -8,12 +8,14 @@ decisions live in DECISIONS.md.
 
 ## Phase
 
-v0.4.0 plus v0.5.0 work in the working tree, neither tagged. v0.4.0's drift
-detection and `review` worklist are implemented, tested, and dogfooded here;
-v0.5.0 adds a `PreCompact` hook, a convention for recording abandoned
-approaches, and size budgets with a generated `DECISIONS.md` index. Version
-strings read 0.5.0; v0.3.0 is still the newest released tag. CONFIRMED:
-`git tag`, `CHANGELOG.md`, `pyproject.toml`.
+v0.5.0 is released and installed from the `kevinifrah` marketplace; v0.5.1 is
+in the working tree, untagged. v0.4.0's drift detection and `review` worklist
+are dogfooded here; v0.5.0 added a `PreCompact` hook, a convention for
+recording abandoned approaches, and size budgets with a generated
+`DECISIONS.md` index. v0.5.1 fixes how those hook notices are delivered — the
+v0.5.0 `PreCompact` notice reached nobody (DEC-009). Version strings read
+0.5.1; v0.5.0 is the newest tag. CONFIRMED: `git tag`, `CHANGELOG.md`,
+`pyproject.toml`.
 
 ## Objective
 
@@ -60,6 +62,13 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
   work, commits past the checkpoint, claims on moved evidence — just before
   the context window is summarised away. It informs and never writes, for the
   reason DEC-004 gave and DEC-007 restates.
+- Hook notices delivered by the channel each event actually has (v0.5.1):
+  `PreCompact` emits a `systemMessage` JSON envelope to the user, and
+  `SessionStart` — the only compaction-adjacent event whose stdout the host
+  injects — carries the same report to the agent when its source is `compact`.
+  `cli._hook_payload` reads the host's stdin payload without blocking on a tty.
+  Covered by `tests/test_hook_delivery.py`, which asserts delivery rather than
+  wording. See DEC-009.
 - A convention for recording approaches that were tried and abandoned
   (v0.5.0), in the `Alternatives considered:` field of the decision for what
   shipped, gated behind three tests in `references/sync-policy.md` so
@@ -95,8 +104,9 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
 
 ## In Progress
 
-v0.4.0 and v0.5.0 are written and green but unreleased: no tag, and the
-marketplace has not been updated. CONFIRMED: `git tag` shows v0.3.0 as newest.
+v0.5.1 is written and green but unreleased: no tag, and the marketplace has not
+been updated. v0.4.0 was never tagged; its changes shipped inside v0.5.0.
+CONFIRMED: `git tag` shows v0.5.0 as newest.
 
 ## Blockers
 
@@ -132,9 +142,15 @@ Specifically outstanding:
   the vocabulary it was written against; that trade raises recall and lowers
   precision, and the precision cost has only been measured here (two added
   findings, both real).
-- The `PreCompact` hook is verified by tests and by hand, but has never been
-  observed firing during a real compaction. That is the only check that proves
-  it is wired rather than merely correct.
+- The v0.5.1 hook delivery fix is verified by tests and by hand, but the
+  post-compaction `SessionStart` notice has not been observed arriving during a
+  real compaction. That is the only check that proves it is wired rather than
+  merely correct — and it is exactly the check v0.5.0 skipped, which is how a
+  hook that reached nobody passed its whole unit suite. It also rests on one unverified
+  assumption: that Claude Code re-fires `SessionStart` with `source: "compact"`
+  after an in-session compaction, rather than only when resuming a compacted
+  session. The documented matcher list includes `compact`, but the behaviour
+  has not been observed here.
 - A cold install by someone with no local checkout has never been exercised;
   every install so far happened on the machine holding the repository.
 - Codex plugin-local hooks may not execute yet (openai/codex#16430), so the

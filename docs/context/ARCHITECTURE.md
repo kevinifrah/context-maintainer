@@ -64,21 +64,32 @@ evidence-policy,sync-policy,mcp-companion}.md`.
 
 Hook-side: `hooks/hooks.json` registers two non-blocking hooks,
 auto-discovered by both hosts from the plugin root. Each runs a thin shell
-wrapper over a `cli.py` `hook` subcommand which prints a one-paragraph notice
-to stdout — added to the agent's context by both hosts — and each stays silent
-unless there is something to act on.
+wrapper over a `cli.py` `hook` subcommand, and each stays silent unless there is
+something to act on. **Where a notice goes differs by event, and getting it
+wrong is silent** — the hook runs, the text is built, and nobody reads it (see
+DEC-009):
 
 - `SessionStart` (v0.2.0) → `hooks/session-start.sh` → `hook session-start`.
-  Speaks when the project is initialized *and* either context is behind HEAD or
-  placeholders remain.
-- `PreCompact` (v0.5.0) → `hooks/pre-compact.sh` → `hook pre-compact`. Speaks
-  when a session is about to be compacted with work it has not recorded:
+  Prints **plain text**, which both hosts add to the agent's context. Speaks
+  when the project is initialized *and* either context is behind HEAD or
+  placeholders remain. Since v0.5.1 it also reports unrecorded session work —
+  but only when the host reports `source == "compact"`, i.e. immediately after a
+  compaction. That restriction is load-bearing: on any other source it would
+  speak in every repository with a dirty working tree.
+- `PreCompact` (v0.5.0) → `hooks/pre-compact.sh` → `hook pre-compact`. Prints a
+  **JSON envelope carrying `systemMessage`**, because `PreCompact` stdout goes
+  to the host's debug log and nowhere else. `systemMessage` reaches the *user*;
+  the agent-facing half of the same report arrives at the next `SessionStart`.
+  Speaks when a session is about to be compacted with work it has not recorded:
   uncommitted source files, commits past the checkpoint, or claims resting on
   moved evidence. Changes under `docs/context/` and `.context-maintainer/` are
   excluded, so a `sync` does not make the next compaction announce itself.
 
-Neither writes anything — see DEC-007. CONFIRMED by direct reading and by
-`tests/test_session_start_hook.py`, `tests/test_pre_compact_hook.py`.
+Both read the host's hook payload from stdin (`cli._hook_payload`), which is how
+`SessionStart` learns its source; a hook run by hand from a terminal gets `{}`
+rather than blocking on a tty. Neither writes anything — see DEC-007.
+CONFIRMED by direct reading and by `tests/test_session_start_hook.py`,
+`tests/test_pre_compact_hook.py`, `tests/test_hook_delivery.py`.
 
 Deliberately absent: a `Stop` hook. Its only channel to the model is
 `decision: "block"`, which would interrupt every turn and risks a loop, so
@@ -137,12 +148,12 @@ CONFIRMED: README "The context contract", `contract.py`, `.gitignore`,
   dependency. CONFIRMED.
 - **Repomix** (optional, MIT, needs Node ≥22) — external CLI invoked in
   stages for audit evidence; `--no-security-check` is never passed (an
-  automated test asserts this). Unavailable in this environment during this
-  audit — Repomix is not installed here, so this audit itself ran in
-  **degraded mode** (see Evidence Level). CONFIRMED: README "How Repomix is
-  used", `repomix.py`, and this session's own
-  `context-maintainer audit --structure-only --json` reporting
-  `degraded_mode: true`.
+  automated test asserts this). Available here as of 2026-08-24 (v1.18.0, via
+  nvm Node 22), and both passes have now been exercised non-degraded for the
+  first time: `--structure-only` and `--full` each returned 0 with
+  `degraded_mode: false`, the full pass capturing 99 files. CONFIRMED: README
+  "How Repomix is used", `repomix.py`, and this session's own
+  `context-maintainer audit --json` output.
 - **mcp-language-server** (optional, BSD-3-Clause) — wraps real language
   servers (gopls, pyright, etc.) as MCP tools so the skill can *confirm*
   call-graph claims (`definition`/`references`/`hover`/`diagnostics`) instead
@@ -185,15 +196,14 @@ CONFIRMED: pyproject.toml, README "Commands"/"Troubleshooting", CI workflow,
 
 ## Evidence Level
 
-This audit ran **degraded**: Repomix is not installed in this environment
-(`context-maintainer audit --structure-only --json` → `degraded_mode: true`,
-`repomix.available: false`), and no `mcp-language-server` companion is
-configured. No structural code-intelligence pass (call-graph verification)
-was performed — the module responsibilities above are stated at the level
-the README and direct file listing support, not verified via
-`definition`/`references`.
+Repomix is now installed here and both audit passes ran clean
+(`degraded_mode: false`), so repository *structure* is confirmed rather than
+assumed. No `mcp-language-server` companion is configured, so there is still no
+structural code-intelligence pass: the module responsibilities above are stated
+at the level the README, direct file listing, and Repomix output support, not
+verified via `definition`/`references`.
 
-Confidence is otherwise high despite the degraded audit, because this
+Confidence is high, because this
 project's own README and CONTRIBUTING.md are unusually thorough,
 self-describing, and specific (they document their own architecture,
 CONTRIBUTING.md documents the doctor-check and contract-change conventions),

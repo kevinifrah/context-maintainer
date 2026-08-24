@@ -3,7 +3,33 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.5.0] — unreleased
+## [0.5.1] — unreleased
+
+### Fixed
+
+- **The `PreCompact` notice reached nobody.** v0.5.0's hook ran, built the right
+  text, printed it, and Claude Code wrote it to a debug log: plain hook stdout
+  is added to the agent's context for `UserPromptSubmit`, `UserPromptExpansion`
+  and `SessionStart` only. `PreCompact` now emits a `systemMessage` JSON
+  envelope, which surfaces to the user, and the agent-facing half of the report
+  moves to `SessionStart` under `source == "compact"` — the only
+  compaction-adjacent event whose output the agent actually receives. Restricted
+  to that source deliberately: reporting a dirty working tree at every session
+  start would speak in every repository anyone is mid-edit in. See DEC-009.
+- Hooks now read the host's payload from stdin (`cli._hook_payload`), which is
+  how `SessionStart` learns its source. It refuses to read a tty, so a hook run
+  by hand cannot block.
+- Notice grammar: "this session is about to be compacted, and 1 uncommitted
+  file" had no verb, and "1 context file still contain unfilled template
+  placeholders" did not agree.
+
+### Added
+
+- `tests/test_hook_delivery.py` — asserts what a host *receives* rather than
+  what a notice builder returns. Every v0.5.0 hook test passed against a notice
+  nobody could read, which is the gap this closes.
+
+## [0.5.0] — 2026-08-24
 
 ### Added
 

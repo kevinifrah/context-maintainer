@@ -126,6 +126,17 @@ _NEGATIVE_PATTERNS = (
 _FENCES = ("```", "~~~")
 _COMMIT_TOKEN = re.compile(r"\b(?=[0-9a-f]{7,40}\b)(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b")
 _VERSION_TOKEN = re.compile(r"\bv?(\d+)\.(\d+)\.(\d+)\b")
+_DATE_TOKEN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+
+def _words(text: str) -> List[str]:
+    """Words, without the hyphens `_WORD` keeps at either end.
+
+    `_WORD` allows internal hyphens so "context-maintainer" stays one word, but
+    it also matches the trailing hyphen in "DEC-004", which silently defeated
+    every lookup against it.
+    """
+    return [w.strip("-") for w in _WORD.findall(text) if w.strip("-")]
 #: A number, then the words that follow it. The noun is not always adjacent —
 #: "17 `doctor` checks" and "18 **deterministic** checks" both put markup and
 #: an adjective in between, and an adjacency-only rule misses exactly the stale
@@ -662,9 +673,15 @@ def _detect_volatile_numbers(
             continue
         lowered = block.text.lower()
         versions = {m.group(0) for m in _VERSION_TOKEN.finditer(block.text)}
+        # Dates are the other unambiguously benign shape. `2026-08-24` reads as
+        # the count "24" the moment the word after it is not one this file
+        # recognises — "24 (v1.18.0" did exactly that.
+        dates = set(_DATE_TOKEN.findall(block.text))
         for match in _NUMBER_NOUN.finditer(lowered):
             number = match.group(1)
             if any(number in version for version in versions):
+                continue
+            if any(number in date for date in dates):
                 continue
             try:
                 value = int(number.replace(",", ""))
@@ -672,13 +689,13 @@ def _detect_volatile_numbers(
                 continue
             if value < _VOLATILE_NUMBER_FLOOR:
                 continue
-            preceding = _WORD.findall(lowered[: match.start()])
+            preceding = _words(lowered[: match.start()])
             if preceding and preceding[-1] in _NUMBER_IDENTIFIERS:
                 continue
             # The noun may sit a word or two past the number, behind markup:
             # "17 `doctor` checks" and "18 **deterministic** checks" both put
             # something in between.
-            following = _WORD.findall(match.group(2))[:3]
+            following = _words(match.group(2))[:3]
             if not following or following[0] in _NUMBER_UNITS:
                 continue
             noun = next((w for w in following if w in _COUNTABLE_NOUNS), None)

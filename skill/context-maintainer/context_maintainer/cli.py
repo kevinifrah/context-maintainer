@@ -638,7 +638,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 MAX_HOOK_NOTICE_CHARS = 900
 
 
-def session_start_notice(root: Path) -> Optional[str]:
+def session_start_notice(root: Path, source: str = "") -> Optional[str]:
     """The notice to inject when a project is opened, or None to stay silent.
 
     Deliberately silent unless the project has *adopted* Context Maintainer and
@@ -656,8 +656,8 @@ def session_start_notice(root: Path) -> Optional[str]:
     if report.placeholder_files:
         count = len(report.placeholder_files)
         problems.append(
-            f"{count} context file{'s' if count != 1 else ''} still contain "
-            "unfilled template placeholders"
+            f"{count} context file{'s' if count != 1 else ''} still "
+            f"contain{'s' if count == 1 else ''} unfilled template placeholders"
         )
 
     # Claim drift is the failure mode a commit count cannot see: nothing may
@@ -677,6 +677,18 @@ def session_start_notice(root: Path) -> Optional[str]:
     except Exception:
         pass
 
+    # A compaction has just discarded this session's unwritten understanding,
+    # and `SessionStart` is the only compaction-adjacent event whose stdout the
+    # host adds to the agent's context — `PreCompact` and `PostCompact` stdout
+    # reach the debug log and nothing else. So the unrecorded-work report is
+    # delivered here, and only here: adding it to every session start would
+    # speak in any repository with a dirty working tree, which is the nagging
+    # DEC-004 warned about.
+    if source == "compact":
+        unrecorded = _unrecorded_work(root)
+        if unrecorded:
+            return _compacted_notice(unrecorded, problems)
+
     if not problems:
         return None
 
@@ -692,9 +704,7 @@ def session_start_notice(root: Path) -> Optional[str]:
         "re-checking, and run the context-maintainer sync workflow if what "
         "they say is no longer true."
     )
-    if len(notice) > MAX_HOOK_NOTICE_CHARS:
-        notice = notice[: MAX_HOOK_NOTICE_CHARS - 1].rstrip() + "…"
-    return notice
+    return _cap(notice)
 
 
 #: Source paths whose movement is worth mentioning before compaction. Context
@@ -710,26 +720,14 @@ def _substantive(paths) -> int:
     )
 
 
-def pre_compact_notice(root: Path) -> Optional[str]:
-    """The notice to inject just before the context window is compacted.
+def _unrecorded_work(root: Path) -> List[str]:
+    """What this session has not written down, as phrases for a notice.
 
-    Compaction is the failure this project was built for: understanding assembled
-    over a long session is about to be summarised away, and whatever nobody wrote
-    down is precisely what does not survive. `SessionStart` catches context that
-    went stale between sessions; nothing caught the moment a session's own
-    knowledge was about to be lost. This does.
-
-    It never writes, and that is not an implementation detail. DEC-004 rejected a
-    `post-commit` hook running `sync --finalize` because it "would mark context as
-    reviewed when nobody reviewed it, and silently wrong documentation is worse
-    than visibly stale documentation". The reasoning binds harder here: the agent
-    is mid-task, nothing is settled, and an automatic re-stamp would attest to
-    prose no human has seen. This informs; the agent decides.
+    Shared by the pre-compaction warning and the post-compaction notice: the
+    two moments differ in tense and audience, not in what counts as work the
+    documents do not yet reflect.
     """
-    if not repository.is_initialized(root) or not gitutil.is_git_repo(root):
-        return None
-
-    outstanding = []
+    outstanding: List[str] = []
 
     working = [path for _status, path in gitutil.get_working_tree_changes(root)]
     uncommitted = _substantive(working)
@@ -767,6 +765,57 @@ def pre_compact_notice(root: Path) -> Optional[str]:
     except Exception:
         pass
 
+    return outstanding
+
+
+def _cap(notice: str) -> str:
+    """Trim a notice to the host's injected-context budget."""
+    if len(notice) > MAX_HOOK_NOTICE_CHARS:
+        return notice[: MAX_HOOK_NOTICE_CHARS - 1].rstrip() + "…"
+    return notice
+
+
+def _compacted_notice(unrecorded: List[str], problems: List[str]) -> str:
+    """The notice for a session that has just been compacted."""
+    tail = ""
+    if problems:
+        tail = (
+            " The recorded context may also be out of date: "
+            + "; ".join(problems)
+            + "."
+        )
+    return _cap(
+        "Context Maintainer: this session was just compacted with work it has "
+        "not recorded: " + "; ".join(unrecorded) + ". Whatever it understood and "
+        "did not write down is gone. Before continuing, decide whether that work "
+        "changed project reality — if it did, run the context-maintainer sync "
+        "workflow now; if it did not, say so and carry on. Record any approach "
+        "you tried and abandoned in docs/context/DECISIONS.md while you still "
+        "remember why." + tail
+    )
+
+
+def pre_compact_notice(root: Path) -> Optional[str]:
+    """The notice to inject just before the context window is compacted.
+
+    Compaction is the failure this project was built for: understanding assembled
+    over a long session is about to be summarised away, and whatever nobody wrote
+    down is precisely what does not survive. `SessionStart` catches context that
+    went stale between sessions; nothing caught the moment a session's own
+    knowledge was about to be lost. This does.
+
+    It never writes, and that is not an implementation detail. DEC-004 rejected a
+    `post-commit` hook running `sync --finalize` because it "would mark context as
+    reviewed when nobody reviewed it, and silently wrong documentation is worse
+    than visibly stale documentation". The reasoning binds harder here: the agent
+    is mid-task, nothing is settled, and an automatic re-stamp would attest to
+    prose no human has seen. This informs; the agent decides.
+    """
+    if not repository.is_initialized(root) or not gitutil.is_git_repo(root):
+        return None
+
+    outstanding = _unrecorded_work(root)
+
     # Silence is the common case and has to stay that way. A notice that fires
     # on every compaction is a notice that gets skimmed on the one where it
     # mattered — the same reasoning that kept a per-turn `Stop` hook out of
@@ -774,31 +823,65 @@ def pre_compact_notice(root: Path) -> Optional[str]:
     if not outstanding:
         return None
 
-    notice = (
-        "Context Maintainer: this session is about to be compacted, and "
-        + "; ".join(outstanding)
-        + ". Anything you have learned that is not written down will not "
-        "survive. Before continuing, decide whether this work changed project "
-        "reality — if it did, run the context-maintainer sync workflow now; if "
-        "it did not, say so and carry on. Record any approach you tried and "
-        "abandoned in docs/context/DECISIONS.md while you still remember why."
+    return _cap(
+        "Context Maintainer: this session is about to be compacted with work it "
+        "has not recorded: " + "; ".join(outstanding) + ". Anything you have "
+        "learned that is not written down will not survive. Before continuing, "
+        "decide whether this work changed project reality — if it did, run the "
+        "context-maintainer sync workflow now; if it did not, say so and carry "
+        "on. Record any approach you tried and abandoned in "
+        "docs/context/DECISIONS.md while you still remember why."
     )
-    if len(notice) > MAX_HOOK_NOTICE_CHARS:
-        notice = notice[: MAX_HOOK_NOTICE_CHARS - 1].rstrip() + "…"
-    return notice
+
+def _hook_payload() -> Dict[str, Any]:
+    """The host's hook input JSON on stdin, or {} when there is none.
+
+    Never blocks: a hook run by hand from a terminal has no piped stdin, and
+    waiting on it would hang the session the hook is supposed to stay out of
+    the way of.
+    """
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return {}
+        raw = sys.stdin.read()
+    except Exception:
+        return {}
+    if not raw.strip():
+        return {}
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
 
 def cmd_hook(args: argparse.Namespace) -> int:
-    """Host-hook entry point. Never fails, never writes, never blocks."""
+    """Host-hook entry point. Never fails, never writes, never blocks.
+
+    How a notice reaches its reader differs by event, and getting this wrong is
+    silent: the hook runs, the text is produced, and nobody sees it.
+
+    - `session-start` prints plain text. `SessionStart` is one of the few events
+      whose stdout the host adds to the agent's context.
+    - `pre-compact` prints a JSON envelope carrying `systemMessage`, because
+      `PreCompact` stdout goes to the debug log only. `systemMessage` surfaces
+      to the *user*; the agent-facing half of this arrives at the next
+      `SessionStart`, whose source is then "compact".
+    """
     try:
-        builder = {
-            "session-start": session_start_notice,
-            "pre-compact": pre_compact_notice,
-        }.get(args.hook_event)
-        if builder is None:
-            return 0
-        notice = builder(_resolve_root())
-        if notice:
-            print(notice)
+        payload = _hook_payload()
+        root = _resolve_root()
+
+        if args.hook_event == "session-start":
+            notice = session_start_notice(
+                root, source=str(payload.get("source") or "")
+            )
+            if notice:
+                print(notice)
+        elif args.hook_event == "pre-compact":
+            notice = pre_compact_notice(root)
+            if notice:
+                print(json.dumps({"systemMessage": notice}))
     except Exception:
         # A hook must never disrupt a session, whatever goes wrong.
         pass

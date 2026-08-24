@@ -488,20 +488,40 @@ So a `PreCompact` hook fires just before that happens, and — again, only when
 there is something to say — names what has not reached the documents yet:
 
 ```
-Context Maintainer: this session is about to be compacted, and 7 uncommitted
-files; 2 documented claims resting on evidence that has since changed.
-Anything you have learned that is not written down will not survive. Before
-continuing, decide whether this work changed project reality — if it did, run
-the context-maintainer sync workflow now; if it did not, say so and carry on.
-Record any approach you tried and abandoned in docs/context/DECISIONS.md while
-you still remember why.
+Context Maintainer: this session is about to be compacted with work it has not
+recorded: 7 uncommitted files; 2 documented claims resting on evidence that has
+since changed. Anything you have learned that is not written down will not
+survive. Before continuing, decide whether this work changed project reality —
+if it did, run the context-maintainer sync workflow now; if it did not, say so
+and carry on. Record any approach you tried and abandoned in
+docs/context/DECISIONS.md while you still remember why.
 ```
 
-It ignores changes to `docs/context/` and `.context-maintainer/` when deciding
-whether to speak, so running a `sync` does not make the next compaction
-announce itself.
+That one is addressed to **you**, and it is worth knowing why. Claude Code adds
+a hook's plain output to the agent's context for only a few events —
+`SessionStart` among them, `PreCompact` not. A `PreCompact` notice printed as
+plain text is written to a debug log and read by nobody, so this one is
+delivered as a `systemMessage`, which surfaces to the user.
 
-Both hooks share three deliberate constraints:
+The agent hears about it one moment later. `SessionStart` fires again after a
+compaction with its source set to `compact`, and on that source — and only that
+source — the same report is injected into the fresh context:
+
+```
+Context Maintainer: this session was just compacted with work it has not
+recorded: 7 uncommitted files. Whatever it understood and did not write down is
+gone. Before continuing, decide whether that work changed project reality — …
+```
+
+It is restricted to `source == "compact"` on purpose. Reporting a dirty working
+tree at every session start would mean speaking in every repository anyone is
+mid-edit in, which is the nagging the first constraint below exists to prevent.
+
+Both notices ignore changes to `docs/context/` and `.context-maintainer/` when
+deciding whether to speak, so running a `sync` does not make the next
+compaction announce itself.
+
+All three notices share three deliberate constraints:
 
 - **Silent unless it matters.** No notice in projects that never adopted
   Context Maintainer, and none when context is already current. A hook that

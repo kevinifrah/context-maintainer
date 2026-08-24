@@ -17,6 +17,7 @@ link to the decision that replaced it.
 - DEC-006 (Accepted) — Detect drift by evidence movement, not by judging prose
 - DEC-007 (Accepted) — A PreCompact hook that informs, and never attests
 - DEC-008 (Accepted) — Budget the context, and index the one file that grows forever
+- DEC-009 (Accepted) — Deliver each hook notice by the channel its event actually has
 
 ## DEC-001: Adopted the Context Maintainer contract
 
@@ -348,5 +349,61 @@ only because the block is derived from headings and contains no judgment, and
 that boundary must hold for anything added here later. If a future document
 also grows without limit, it needs the same treatment rather than a bigger
 budget.
+
+Date/commit if known: 2026-08-24
+
+## DEC-009: Deliver each hook notice by the channel its event actually has
+
+Status: Accepted
+
+Decision: Choose the output form per hook event rather than per hook.
+`SessionStart` prints plain text, which the host adds to the agent's context.
+`PreCompact` prints a JSON envelope carrying `systemMessage`, which surfaces to
+the user. The agent-facing half of the compaction report moves to
+`SessionStart` under `source == "compact"`, and is restricted to that source.
+
+Why: v0.5.0 shipped a `PreCompact` hook that ran correctly and was read by
+nobody. Claude Code adds a hook's plain stdout to the agent's context for
+`UserPromptSubmit`, `UserPromptExpansion` and `SessionStart` only; for every
+other event, including `PreCompact` and `PostCompact`, stdout goes to the debug
+log and nowhere else. `PreCompact` accepts `systemMessage` and
+`preCompactDecision`, but not `additionalContext` — there is no way to inject
+context from that event at all. So the notice had to split: the warning before
+compaction can only reach a human, and the agent can only be told afterwards.
+
+The `source == "compact"` restriction is part of the decision, not an
+implementation detail. Reporting a dirty working tree at every session start
+would speak in every repository anyone is mid-edit in, which is precisely the
+noise argument DEC-004 and DEC-007 both turned on.
+
+Evidence/context: `cli._hook_payload`, `cli.cmd_hook`, `cli._compacted_notice`,
+`skill/context-maintainer/hooks/pre-compact.sh`,
+`tests/test_hook_delivery.py`. CONFIRMED by inspecting this repository's own
+session transcript across a real `/compact`: the compaction boundary carried no
+hook output in either direction. Also confirmed against the hooks documentation
+at https://code.claude.com/docs/en/hooks.
+
+Alternatives considered: printing plain text from `PreCompact` — tried, shipped
+in v0.5.0, and abandoned once a real compaction showed the notice reaching
+nothing. It is recorded because it is the obvious implementation, it looks
+correct in every unit test, and a future change that "simplifies" the JSON
+envelope away would silently reintroduce it. Also considered moving the notice
+to `PostCompact`, which fires after compaction completes and would have the
+right timing for the agent; rejected because its stdout has the same
+debug-log-only fate. Also considered dropping the `PreCompact` hook entirely
+and reporting only at the next `SessionStart`; rejected because the user
+losing a window of work still deserves to be told at the moment it happens,
+even when the agent cannot be.
+
+Consequences: The two hooks no longer share one output contract, only the
+behavioural one — always exit 0, never write, stay silent unless something
+needs doing. That asymmetry is a trap for a future editor, so it is asserted in
+`tests/test_hook_delivery.py`, which tests what a host receives rather than
+what a notice builder returns. Both hooks now read stdin; `_hook_payload`
+refuses to read a tty so a hand-run hook cannot hang. One assumption remains
+unverified: that `SessionStart` re-fires with `source: "compact"` after an
+in-session compaction, rather than only on resuming a compacted session. The
+documented matcher list includes `compact`; the behaviour has not been observed
+here, and STATE.md records it as outstanding.
 
 Date/commit if known: 2026-08-24

@@ -1,12 +1,12 @@
 {
   "attestations": {
     "docs/context/ARCHITECTURE.md": {
-      "at": "2026-08-24T09:50:26+00:00",
-      "commit": "3c43465f3e0e22221a8fd1726a6c13563a3aec46",
+      "at": "2026-08-24T11:54:46+00:00",
+      "commit": "1a4fe0e438ff15e523251a18cec03d19fa47db95",
       "evidence": {
         ".agents/plugins": "92132b1",
         ".claude-plugin": "3c43465",
-        ".context-maintainer": "fd27551",
+        ".context-maintainer": "1a4fe0e",
         ".github/workflows/ci.yml": "3010ebe",
         "CONTRIBUTING.md": "13e1d67",
         "docs/CI.md": "3c43465",
@@ -41,10 +41,10 @@
       }
     },
     "docs/context/DECISIONS.md": {
-      "at": "2026-08-24T09:50:26+00:00",
-      "commit": "3c43465f3e0e22221a8fd1726a6c13563a3aec46",
+      "at": "2026-08-24T11:54:46+00:00",
+      "commit": "1a4fe0e438ff15e523251a18cec03d19fa47db95",
       "evidence": {
-        ".context-maintainer": "fd27551",
+        ".context-maintainer": "1a4fe0e",
         ".github/workflows/ci.yml": "3010ebe",
         "CHANGELOG.md": "3c43465",
         "CONTRIBUTING.md": "13e1d67",
@@ -67,8 +67,8 @@
       }
     },
     "docs/context/PROJECT.md": {
-      "at": "2026-08-24T09:50:26+00:00",
-      "commit": "3c43465f3e0e22221a8fd1726a6c13563a3aec46",
+      "at": "2026-08-24T11:54:46+00:00",
+      "commit": "1a4fe0e438ff15e523251a18cec03d19fa47db95",
       "evidence": {
         "CONTRIBUTING.md": "13e1d67",
         "README.md": "3c43465",
@@ -81,8 +81,8 @@
       }
     },
     "docs/context/STATE.md": {
-      "at": "2026-08-24T09:50:26+00:00",
-      "commit": "3c43465f3e0e22221a8fd1726a6c13563a3aec46",
+      "at": "2026-08-24T11:54:46+00:00",
+      "commit": "1a4fe0e438ff15e523251a18cec03d19fa47db95",
       "evidence": {
         ".claude-plugin": "3c43465",
         "CHANGELOG.md": "3c43465",
@@ -104,8 +104,8 @@
       }
     },
     "docs/context/WORKFLOWS.md": {
-      "at": "2026-08-24T09:50:26+00:00",
-      "commit": "3c43465f3e0e22221a8fd1726a6c13563a3aec46",
+      "at": "2026-08-24T11:54:46+00:00",
+      "commit": "1a4fe0e438ff15e523251a18cec03d19fa47db95",
       "evidence": {
         ".github/workflows/ci.yml": "3010ebe",
         "CONTRIBUTING.md": "13e1d67",

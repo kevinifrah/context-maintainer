@@ -29,6 +29,13 @@ launcher="$plugin_root/scripts/cm.sh"
 # `hook pre-compact` prints a notice only when action is warranted, and is
 # itself written to never raise. Suppress stderr so a broken environment stays
 # invisible rather than alarming, and swallow any non-zero status.
+#
+# Unlike session-start.sh, what this prints is a JSON envelope carrying
+# `systemMessage`, not plain text. PreCompact stdout is written to the host's
+# debug log and shown nowhere else, so a plain-text notice here would run,
+# succeed, and be read by nobody. `systemMessage` surfaces to the user; the
+# agent-facing half arrives at the next SessionStart, whose source is
+# "compact". The host's hook input JSON is left on stdin for the CLI to read.
 sh "$launcher" hook pre-compact 2>/dev/null || true
 
 exit 0

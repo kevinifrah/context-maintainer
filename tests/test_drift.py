@@ -258,6 +258,15 @@ def test_a_count_is_flagged_whatever_noun_it_uses(
         "Tracked upstream as issue 16430 for now.",
         # Too small to be a measurement anyone re-derives.
         "Both of the 2 hosts read the same files.",
+        # A date whose trailing field lands next to a word this file does not
+        # know. `2026-08-24 (v1.18.0` read as the count "24 v" until dates were
+        # suppressed the way versions already were.
+        "Available here as of 2026-08-24 (v1.18.0, via nvm Node 22).",
+        "Attested at 2026-08-24 (commit fd27551) by the agent.",
+        # A decision identifier. `_WORD` kept the trailing hyphen, so "DEC-004"
+        # yielded "dec-" and never matched the `dec` suppression written for it.
+        "It never writes, for the reason DEC-004 gave and DEC-007 restates.",
+        "Superseded by ADR-017 after the review.",
     ],
 )
 def test_a_number_that_is_not_a_count_is_left_alone(git_repo: Path, sentence: str):

@@ -32,7 +32,7 @@ CONFIRMED: CONTRIBUTING.md "Development setup".
 pytest -q
 ```
 
-Confirmed by running it directly: **498 tests pass** as of 2026-08-24
+Confirmed by running it directly: **519 tests pass** as of 2026-08-24
 (README states "300+ automated tests", which still holds). This is the one
 place that states the figure; other documents describe the suite without
 repeating a number, so there is a single thing to update when it changes.
