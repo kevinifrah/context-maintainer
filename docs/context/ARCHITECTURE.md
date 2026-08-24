@@ -45,9 +45,10 @@ Persistence/Integrations below). CONFIRMED by direct reading:
 | `manifest.py` | Reads/writes `.context-maintainer/manifest.json` |
 | `contract.py` | The context contract (required files/sections), as data |
 | `mdsections.py` | Markdown H2 section parser, used to validate/diff docs |
+| `decisionindex.py` | Parses `## DEC-NNN:` entries and regenerates the `## Index` block at the head of `DECISIONS.md`. Derived structure, not prose, so the CLI owns it — see DEC-008 |
 | `scaffold.py` | Safe file creation, placeholder insertion, backups |
 | `briefing.py` | Builds the `status` report |
-| `doctor.py` | 18 deterministic health checks (`CHECKS` list), plus an optional `--verify` pass (v0.3.0) that cross-checks documented claims against evidence |
+| `doctor.py` | 19 deterministic health checks (`CHECKS` list), plus an optional `--verify` pass (v0.3.0) that cross-checks documented claims against evidence |
 | `verify.py` | Backs `doctor --verify`: extracts documented commands (WORKFLOWS.md) and technologies (ARCHITECTURE.md) and checks each against repo evidence (marker file, dependency entry, source usage), yielding CONFIRMED / UNVERIFIED / CONTRADICTED per claim — never fails on UNVERIFIED, only on CONTRADICTED |
 | `drift.py` | Backs `review` and `doctor --verify`'s `context_drift` check (v0.4.0). Segments each context document into claim-sized blocks, resolves the citations they carry against a repo path index, and compares each cited file to the baseline in `.context-maintainer/evidence.json`. Reports DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE, VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED. Also owns the ledger (`record_attestation`, called by `sync --finalize`) |
 | `repomix.py` | Staged Repomix invocation (structure pass, full pass) and degraded-mode handling |

@@ -32,10 +32,10 @@ them would make `--strict` useless for the one job it exists to do.
 | `checkpoint_valid` | The recorded commit does not exist (rewritten history) |
 | `referenced_paths` | Documents link to files that are gone |
 | `no_duplication` | `AGENTS.md` has become a knowledge dump |
-| `context_size` | A document has grown far beyond a briefing |
 | `claims_verified` | **A documented claim is contradicted by the repository** |
 | `context_drift` (FAIL only) | **A claim cites a file or commit that does not exist, or the repository is tagged newer than any context document describes.** Its WARN is advisory — see below |
 | `plugin_manifests` | Only relevant when developing the tool itself |
+| `decisions_index` | `DECISIONS.md` outgrew a whole-file read and its generated index is missing or stale |
 
 **Never fails the build** (`ADVISORY_CHECKS`):
 
@@ -46,6 +46,7 @@ them would make `--strict` useless for the one job it exists to do.
 | `skill_installation` | CI has no agent host installed |
 | `checkpoint_freshness` | A pull request is legitimately ahead of the last sync |
 | `state_freshness` | Punishing an unrelated PR because nobody confirmed STATE recently is the wrong lever |
+| `context_size` | Context over budget is expensive, not wrong. Blocking a PR because a document grew 1 KiB is the noise DEC-005 exists to avoid |
 | `context_drift` (WARN only) | A claim's evidence moved. Unverified is not wrong — see below |
 
 ### What `context_drift` deliberately does *not* fail on

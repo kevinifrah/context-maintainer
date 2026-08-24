@@ -19,6 +19,10 @@ def _result(report: doctor.DoctorReport, name: str) -> doctor.CheckResult:
     return next(r for r in report.results if r.name == name)
 
 
+def report_of(root: Path) -> doctor.DoctorReport:
+    return doctor.run_all_checks(root)
+
+
 def test_doctor_does_not_fail_on_freshly_scaffolded_blank_project(blank_repo: Path):
     _initialize(blank_repo)
     report = doctor.run_all_checks(blank_repo)
@@ -139,6 +143,65 @@ def test_doctor_warns_when_context_file_is_absurdly_large(blank_repo: Path):
     )
     report = doctor.run_all_checks(blank_repo)
     assert _result(report, "context_size").status == doctor.WARN
+
+
+def test_doctor_warns_when_the_set_is_over_budget_though_no_file_is(blank_repo: Path):
+    """The budget that actually matters. Five individually-reasonable documents
+    can still cost more attention than the work they were meant to inform."""
+    _initialize(blank_repo)
+    share = (contract.MAX_CONTEXT_TOTAL_BYTES // 5) + 512
+    for path in contract.context_document_paths(blank_repo):
+        assert share < contract.MAX_CONTEXT_FILE_BYTES
+        path.write_text(
+            path.read_text(encoding="utf-8") + ("x" * share), encoding="utf-8"
+        )
+    result = _result(report_of(blank_repo), "context_size")
+    assert result.status == doctor.WARN
+    assert "totals" in result.message
+
+
+def test_context_size_never_fails_a_strict_build(blank_repo: Path):
+    """Per DEC-005: an oversized document is expensive, not wrong. The strict
+    gate is reserved for claims the repository contradicts."""
+    assert "context_size" in doctor.ADVISORY_CHECKS
+
+
+def test_doctor_wants_no_index_while_decisions_is_short(blank_repo: Path):
+    _initialize(blank_repo)
+    assert _result(report_of(blank_repo), "decisions_index").status == doctor.PASS
+
+
+def test_doctor_warns_when_a_grown_decisions_file_has_no_index(blank_repo: Path):
+    _initialize(blank_repo)
+    path = blank_repo / "docs/context/DECISIONS.md"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + "".join(
+            f"\n## DEC-{i:03d}: Decision {i}\n\nStatus: Accepted\n\nWhy: reasons.\n"
+            for i in range(2, 12)
+        ),
+        encoding="utf-8",
+    )
+    result = _result(report_of(blank_repo), "decisions_index")
+    assert result.status == doctor.WARN
+    assert "missing" in result.message
+
+
+def test_doctor_accepts_a_regenerated_index(blank_repo: Path):
+    from context_maintainer import decisionindex
+
+    _initialize(blank_repo)
+    path = blank_repo / "docs/context/DECISIONS.md"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + "".join(
+            f"\n## DEC-{i:03d}: Decision {i}\n\nStatus: Accepted\n\nWhy: reasons.\n"
+            for i in range(2, 12)
+        ),
+        encoding="utf-8",
+    )
+    decisionindex.refresh(path)
+    assert _result(report_of(blank_repo), "decisions_index").status == doctor.PASS
 
 
 def test_doctor_warns_when_agents_md_duplicates_context_prose(blank_repo: Path):

@@ -101,6 +101,33 @@ Date/commit if known: 2026-03-14, a1b2c3d
 Do not manufacture decisions that evidence cannot support. Never delete a
 meaningful decision that was replaced — mark it `Superseded` and link forward.
 
+Because nothing is ever deleted, this is the one document that grows without
+limit — every other one is a snapshot you overwrite or is bounded by the
+project itself. Once it reaches six entries the CLI maintains an `## Index`
+section at the top listing every entry, its status, and its title, so checking
+whether a decision exists costs a few hundred bytes instead of the whole file.
+
+That index is **generated**, not written: `sync --finalize` rebuilds it from
+the `## DEC-NNN:` headings and `doctor` reports it when it is stale. Edit the
+headings, never the index. It is deliberately an index and not a summary — a
+summary would restate claims, drift on its own, and give `review` two places to
+adjudicate instead of one.
+
+## Size budgets
+
+Context is only useful if reading it costs less than the work it informs. Two
+budgets, both reported by `doctor` and neither one a build failure — an
+oversized document is expensive, not *wrong*:
+
+- **Per document:** 24 KiB.
+- **The whole of `docs/context/`:** 64 KiB.
+
+Both report at 85% so there is room to act before the budget is gone. When one
+trips, cut rather than reorganise: overwrite snapshots instead of appending to
+them, leave narrative history in Git, and treat a long section that cites
+nothing as the cheapest thing to lose — it is both the most expensive prose to
+read and the only kind `review` can never check for you.
+
 ## manifest.json
 
 Machine metadata only: schema version, init mode, timestamps, last verified

@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.5.0] — unreleased
 
 ### Added
 
@@ -22,6 +22,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   same wall. Gated behind three tests in `references/sync-policy.md` — actually
   attempted, failed for a project-specific reason, someone would plausibly try
   it again — so `DECISIONS.md` does not become a diary.
+- Two size budgets for `docs/context/` — 24 KiB per document, 64 KiB across
+  the set, both reported at 85% — because context only helps if reading it
+  costs less than the work it informs, and nothing measured that. The old
+  per-file cap of 32 KiB with no total quietly permitted ~190 KiB, about 48k
+  tokens. Reported, never enforced: `context_size` moves to `ADVISORY_CHECKS`,
+  since an oversized document is expensive rather than wrong and DEC-005
+  reserves the strict gate for claims the repository contradicts.
+- A generated `## Index` at the head of `DECISIONS.md` once it passes six
+  entries. It is the only context document that grows without limit — nothing
+  may be deleted from it — yet nobody needs to read it: they need to check
+  whether a decision exists before reversing one. The index turns that lookup
+  from 15 KiB into about 700 bytes. Rebuilt by `sync --finalize`, reported by
+  `doctor`, and deliberately an index rather than a summary: it restates only
+  the headings below it, so it cannot drift into a second account or give
+  `review` two places to adjudicate the same claim. See DEC-008.
 
 ### Fixed
 

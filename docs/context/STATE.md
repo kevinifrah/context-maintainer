@@ -10,9 +10,10 @@ decisions live in DECISIONS.md.
 
 v0.4.0 plus v0.5.0 work in the working tree, neither tagged. v0.4.0's drift
 detection and `review` worklist are implemented, tested, and dogfooded here;
-v0.5.0 adds a `PreCompact` hook and a convention for recording abandoned
-approaches. v0.3.0 is the newest released tag. CONFIRMED: `git tag`,
-`CHANGELOG.md`.
+v0.5.0 adds a `PreCompact` hook, a convention for recording abandoned
+approaches, and size budgets with a generated `DECISIONS.md` index. Version
+strings read 0.5.0; v0.3.0 is still the newest released tag. CONFIRMED:
+`git tag`, `CHANGELOG.md`, `pyproject.toml`.
 
 ## Objective
 
@@ -63,6 +64,15 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
   (v0.5.0), in the `Alternatives considered:` field of the decision for what
   shipped, gated behind three tests in `references/sync-policy.md` so
   `DECISIONS.md` does not become a diary. Prose only — no CLI, no new store.
+- Context size budgets (v0.5.0): 24 KiB per document and 64 KiB across
+  `docs/context/`, both reported by `doctor` at 85% and again when exceeded,
+  and both advisory — an oversized document is expensive, not wrong (DEC-008).
+- A generated `## Index` at the head of `DECISIONS.md` (v0.5.0,
+  `decisionindex.py`), maintained by `sync --finalize` once the file passes six
+  entries. It is the only context document that grows without limit, and the
+  index turns a lookup there from ~15 KiB into ~700 bytes. An index, not a
+  summary: it restates only the headings below it, so it cannot drift on its
+  own (DEC-008).
 - Time-based STATE staleness (v0.3.0): `manifest.json` records
   `state_confirmed_at`; after 21 days `doctor` and the session hook ask for
   re-confirmation even if nothing else changed.

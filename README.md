@@ -20,6 +20,7 @@
 - [Commands](#commands)
 - [Staying current automatically](#staying-current-automatically)
 - [The context contract](#the-context-contract)
+- [Keeping context cheap to read](#keeping-context-cheap-to-read)
 - [How Claude Code and Codex share context](#how-claude-code-and-codex-share-context)
 - [How Repomix is used](#how-repomix-is-used)
 - [Structural code analysis](#structural-code-analysis)
@@ -112,7 +113,7 @@ context-maintainer/
 │       ├── mdsections.py          # markdown H2 parser
 │       ├── scaffold.py            # safe file creation and backups
 │       ├── briefing.py            # the `status` report
-│       ├── doctor.py              # 18 deterministic health checks
+│       ├── doctor.py              # 19 deterministic health checks
 │       ├── verify.py              # documented claims vs repository evidence
 │       ├── drift.py               # claims that outlived the evidence they cite
 │       ├── repomix.py             # staged evidence gathering
@@ -382,7 +383,7 @@ context-maintainer review --json
 ```text
 docs/context/ARCHITECTURE.md
   [WARN] STALE_EVIDENCE — Components
-      “| `doctor.py` | 18 deterministic health checks (`CHECKS` list) |”
+      “| `doctor.py` | 19 deterministic health checks (`CHECKS` list) |”
       rests on `…/doctor.py`, which has changed since this was last confirmed (b3aebed → 3010ebe)
       → Re-read the claim against the current file. Correct it, or re-confirm it.
 ```
@@ -407,7 +408,7 @@ And `review` only ever asks — it is `doctor` that decides whether a build fail
 
 ### `doctor`
 
-18 deterministic checks, no judgment involved: required files present, manifest present / parseable / schema-valid, `CLAUDE.md` → `AGENTS.md` bridge intact, required sections present, decision entries present, leftover placeholders, checkpoint valid, checkpoint not far behind HEAD, cache ignored, context files not absurdly large, `AGENTS.md` not duplicating the context documents, links resolving, Repomix available, MCP companion configured, skill installed correctly, plugin manifests valid.
+19 deterministic checks, no judgment involved: required files present, manifest present / parseable / schema-valid, `CLAUDE.md` → `AGENTS.md` bridge intact, required sections present, decision entries present, leftover placeholders, checkpoint valid, checkpoint not far behind HEAD, cache ignored, context within its size budgets, `DECISIONS.md` index current, `AGENTS.md` not duplicating the context documents, links resolving, Repomix available, MCP companion configured, skill installed correctly, plugin manifests valid, STATE recently confirmed.
 
 ```bash
 context-maintainer doctor
@@ -557,6 +558,76 @@ Three rules keep these files useful rather than bloated:
 1. **`AGENTS.md` is a router, not a knowledge base.** It links to `docs/context/`; it never restates it. `doctor` warns if it starts duplicating content.
 2. **`STATE.md` is a snapshot, not a log.** It gets overwritten. History belongs in Git; durable rationale belongs in `DECISIONS.md`.
 3. **`manifest.json` holds machine metadata only** — schema version, mode, timestamps, last verified commit, tool versions. Unknown keys are rejected specifically to stop project knowledge leaking into it.
+
+---
+
+## Keeping context cheap to read
+
+Context only helps if reading it costs less than the work it informs. Nothing
+in the tool measured that until v0.5.0 — the per-file cap was 32 KiB with no
+total, so the contract quietly permitted about 190 KiB across the set, roughly
+48k tokens, before saying a word.
+
+### Two budgets
+
+| Budget | Limit | Reported at |
+|---|---|---|
+| Any one document | 24 KiB | 85% |
+| All of `docs/context/` | 64 KiB | 85% |
+
+`doctor` reports both. Neither fails a build, including under `--strict`: an
+oversized document is expensive, not *wrong*, and the strict gate is reserved
+for claims the repository contradicts (DEC-005, DEC-008).
+
+When a budget trips, **cut — do not reorganise**. Splitting five documents into
+thirty makes things worse: the agent globs, opens several, and spends more than
+it saved. In order of what to lose first:
+
+1. **Prose that cites nothing.** The most expensive text to read and the only
+   kind `review` can never check for you. In this repository that was 36% of
+   all claim blocks.
+2. **Narrative history.** It belongs in Git, which already has it.
+3. **Anything appended to a snapshot.** `STATE.md` is meant to be overwritten.
+
+### The `DECISIONS.md` index
+
+`DECISIONS.md` is the only document that grows without limit — the contract
+forbids deleting a superseded decision, so it only ever gets longer. Here it is
+already the largest file in the set.
+
+But nobody needs to *read* it. They need to check whether a decision exists
+before reversing one, which is a lookup being paid for as a full read. So once
+the file passes six entries the CLI maintains an index at the top:
+
+```markdown
+## Index
+
+<!-- CONTEXT-MAINTAINER: generated from the headings below. Edit those, not this. -->
+
+- DEC-001 (Accepted) — Adopted the Context Maintainer contract
+- DEC-002 (Accepted) — Rejected DeusData/codebase-memory-mcp as a backend
+- DEC-003 (Superseded) — Marketplace renamed to kevinifrah
+```
+
+Roughly 700 bytes standing in for 15 KiB. The agent reads the index and then
+one entry.
+
+**An index, not a summary** — the distinction is the whole design. A summary
+restates claims, so it can drift on its own and gives `review` two places to
+adjudicate every claim instead of one. An index restates only the
+`## DEC-NNN:` headings that already exist verbatim below it, so it can never
+say anything the document does not. That is also why the CLI generates it
+rather than the agent writing it: it is derived structure, not prose.
+
+`sync --finalize` rebuilds it; `doctor` reports it when it is stale. Edit the
+headings, never the index.
+
+### What this deliberately is not
+
+There is no vector store, embedding index, or knowledge graph, and there will
+not be. Retrieval is what you build once your context has outgrown the window —
+the bet here is that a project's durable context fits in 64 KiB, and the budget
+is how that bet is kept honest rather than quietly lost.
 
 ---
 

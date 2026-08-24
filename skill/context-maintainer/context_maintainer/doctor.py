@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from . import contract, gitutil, manifest as manifest_mod, mcp_companion, mdsections
+from . import contract, decisionindex, gitutil, manifest as manifest_mod, mcp_companion, mdsections
 from . import repomix as repomix_mod
 
 PASS = "PASS"
@@ -34,6 +34,7 @@ ADVISORY_CHECKS = frozenset(
         "skill_installation",
         "checkpoint_freshness",
         "state_freshness",
+        "context_size",
         # Listed here only to stop `--strict` promoting its WARN. This check
         # still FAILs on its own for an unambiguous defect, and a FAIL is never
         # advisory. Its WARN means "a claim's evidence moved, so nobody has
@@ -354,20 +355,103 @@ def check_cache_gitignored(root: Path) -> CheckResult:
     )
 
 
+def _kib(size: int) -> str:
+    return f"{size / 1024:.1f} KiB"
+
+
 def check_context_files_not_oversized(root: Path) -> CheckResult:
-    oversized: List[str] = []
-    for path in contract.context_document_paths(root):
-        if path.exists() and path.stat().st_size > contract.MAX_CONTEXT_FILE_BYTES:
-            oversized.append(f"{path.name} ({path.stat().st_size // 1024} KiB)")
-    if oversized:
+    """Both budgets: per document, and — the one that matters — in total.
+
+    A per-file cap on its own permits five individually-reasonable documents
+    that together cost more to read than the work they were meant to inform,
+    and nothing in the contract would ever mention it. Reported rather than
+    enforced: an oversized document is expensive, not *wrong*, and DEC-005
+    reserves the strict gate for claims the repository contradicts.
+    """
+    sizes = [
+        (path.name, path.stat().st_size)
+        for path in contract.context_document_paths(root)
+        if path.exists()
+    ]
+    total = sum(size for _name, size in sizes)
+    file_cap = contract.MAX_CONTEXT_FILE_BYTES
+    total_cap = contract.MAX_CONTEXT_TOTAL_BYTES
+    soft = contract.CONTEXT_SIZE_SOFT_RATIO
+
+    over = [f"{n} ({_kib(s)})" for n, s in sizes if s > file_cap]
+    near = [f"{n} ({_kib(s)})" for n, s in sizes if file_cap >= s > file_cap * soft]
+
+    problems = []
+    if total > total_cap:
+        problems.append(
+            f"the set totals {_kib(total)}, over the {_kib(total_cap)} budget"
+        )
+    elif total > total_cap * soft:
+        problems.append(
+            f"the set totals {_kib(total)} of a {_kib(total_cap)} budget"
+        )
+    if over:
+        problems.append("over the per-document cap: " + ", ".join(over))
+    if near:
+        problems.append("approaching it: " + ", ".join(near))
+
+    if not problems:
         return CheckResult(
             "context_size",
-            WARN,
-            "Context documents are unusually large: " + ", ".join(oversized),
-            "These should stay compact briefings; move history to Git and "
-            "durable rationale to DECISIONS.md.",
+            PASS,
+            f"Context documents total {_kib(total)} of a {_kib(total_cap)} budget.",
         )
-    return CheckResult("context_size", PASS, "Context documents are a reasonable size.")
+    return CheckResult(
+        "context_size",
+        WARN,
+        "Context is getting expensive to read — " + "; ".join(problems) + ".",
+        "Cut what no longer earns its place. Snapshots (STATE) should be "
+        "overwritten, not appended to; narrative history belongs in Git; a "
+        "long section that cites nothing is the cheapest thing to lose. "
+        "`context-maintainer review` lists claims worth re-reading first.",
+    )
+
+
+def check_decisions_index_current(root: Path) -> CheckResult:
+    """DECISIONS.md is the one document that grows without limit.
+
+    The contract forbids deleting a superseded decision, so this file only ever
+    gets longer — and an agent almost never needs to read it, only to check
+    whether a decision exists before reversing one. The index turns that lookup
+    back into a few hundred bytes. It is derived from the headings, so it is
+    regenerated rather than written, and going stale is mechanical, not
+    editorial.
+    """
+    path = root / "docs/context/DECISIONS.md"
+    text = _read(path)
+    if text is None:
+        return CheckResult(
+            "decisions_index", PASS, "DECISIONS.md absent — covered by required_files."
+        )
+    entries = decisionindex.parse_entries(text)
+    if not decisionindex.needs_index(entries):
+        return CheckResult(
+            "decisions_index",
+            PASS,
+            f"DECISIONS.md has {len(entries)} entries — small enough to read "
+            f"whole (index starts at {decisionindex.MIN_ENTRIES}).",
+        )
+    if decisionindex.is_current(text):
+        return CheckResult(
+            "decisions_index",
+            PASS,
+            f"DECISIONS.md index lists all {len(entries)} entries.",
+        )
+    present = decisionindex.extract(text) is not None
+    return CheckResult(
+        "decisions_index",
+        WARN,
+        f"DECISIONS.md has {len(entries)} entries and its index is "
+        + ("out of date" if present else "missing")
+        + " — a lookup there costs the whole document.",
+        "Run `context-maintainer sync --finalize` to regenerate it. It is "
+        "derived from the `## DEC-NNN:` headings; edit those, not the index.",
+    )
 
 
 def check_no_duplicated_instructions(root: Path) -> CheckResult:
@@ -753,6 +837,7 @@ CHECKS: List[Callable[[Path], CheckResult]] = [
     check_git_checkpoint_not_far_behind_head,
     check_cache_gitignored,
     check_context_files_not_oversized,
+    check_decisions_index_current,
     check_no_duplicated_instructions,
     check_referenced_paths_exist,
     check_repomix_available,

@@ -143,7 +143,14 @@ make a broken document look clean.
    silently repair.
 
 A WARN for a missing Repomix or MCP companion is not a defect — it means
-reduced capability, and you should say which.
+reduced capability, and you should say which. Nor is `context_size`: it means
+the context is getting expensive to read, and the fix is to cut, never to
+reorganise into more files. A tree of small documents costs more to navigate
+than a few compact ones.
+
+`decisions_index` means `DECISIONS.md` outgrew a whole-file read. The index is
+generated from the `## DEC-NNN:` headings — regenerate it with `sync
+--finalize`, and never hand-edit it.
 
 `--verify` adds two checks that judge content rather than structure:
 `claims_verified` (is a documented command or technology contradicted by the
@@ -267,6 +274,10 @@ plausibly try it again. `references/sync-policy.md` states those three tests.
 - **Never read secret values.** Recording that a mechanism exists is fine;
   reading `.env` to see what is in it is not.
 - **`STATE.md` is a snapshot, not a log.** Overwrite it. History lives in Git.
+- **Context has a budget.** Every document competes for the same attention as
+  the work itself. Before adding a paragraph, ask what it displaces. Prose that
+  cites nothing is the first thing to cut: it is the most expensive to read and
+  the only kind `review` can never check.
 - **`AGENTS.md` is a router, not a knowledge base.** It links to
   `docs/context/`; it does not restate it.
 - **Do not silently reverse a documented decision.** Record a new one that

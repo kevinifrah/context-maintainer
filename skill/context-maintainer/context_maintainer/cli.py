@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import __version__, briefing, contract, doctor, gitutil, manifest as manifest_mod
-from . import contextlog, drift
+from . import contextlog, decisionindex, drift
 from . import installer as installer_mod
 from . import mcp_companion, repomix as repomix_mod, repository, scaffold
 
@@ -358,6 +358,12 @@ def _finalize_checkpoint(
         # Confirming intent is what makes STATE trustworthy; record when.
         loaded.state_confirmed_at = manifest_mod.utc_now()
     manifest_mod.save_manifest(loaded, root / contract.MANIFEST_PATH)
+
+    # Regenerate the DECISIONS index before attesting, so the baseline covers
+    # the text as it will actually stand. It is derived from the headings, so
+    # this is scaffolding rather than writing prose — the CLI/skill boundary
+    # holds: nothing here decides what a decision *means*.
+    decisionindex.refresh(root / "docs/context/DECISIONS.md")
 
     # Re-stamp what each document now rests on. Read from the current prose
     # rather than carried forward, so the baseline always describes the claims

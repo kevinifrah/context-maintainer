@@ -20,7 +20,16 @@ CONTEXT_DIR = "docs/context"
 
 #: Context documents larger than this are almost certainly accumulating churn
 #: rather than staying a compact briefing.
-MAX_CONTEXT_FILE_BYTES = 32_768
+MAX_CONTEXT_FILE_BYTES = 24_576
+
+#: The budget that actually matters. A per-file cap alone permits five
+#: individually-reasonable documents that together cost more attention than any
+#: agent should spend before starting work, and nothing would ever say so.
+MAX_CONTEXT_TOTAL_BYTES = 65_536
+
+#: Report at this fraction of either budget. A budget you only hear about once
+#: you have blown it arrives too late to act on cheaply.
+CONTEXT_SIZE_SOFT_RATIO = 0.85
 
 
 @dataclass(frozen=True)

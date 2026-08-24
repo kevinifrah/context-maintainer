@@ -5,6 +5,19 @@ historical decisions that can't be supported by evidence — label inferred
 ones explicitly. Never delete a superseded decision; mark it `Superseded` and
 link to the decision that replaced it.
 
+## Index
+
+<!-- CONTEXT-MAINTAINER: generated from the headings below. Edit those, not this. -->
+
+- DEC-001 (Accepted) — Adopted the Context Maintainer contract
+- DEC-002 (Accepted) — Rejected DeusData/codebase-memory-mcp as a structural-analysis backend
+- DEC-003 (Accepted) — Marketplace renamed to kevinifrah, decoupled from the plugin name
+- DEC-004 (Accepted) — Automatic staleness detection via SessionStart, not a per-turn Stop hook
+- DEC-005 (Accepted) — doctor --verify --strict as a CI gate, with environmental checks kept advisory
+- DEC-006 (Accepted) — Detect drift by evidence movement, not by judging prose
+- DEC-007 (Accepted) — A PreCompact hook that informs, and never attests
+- DEC-008 (Accepted) — Budget the context, and index the one file that grows forever
+
 ## DEC-001: Adopted the Context Maintainer contract
 
 Status: Accepted
@@ -268,5 +281,72 @@ register no blocking event. The hook excludes `docs/context/` and
 not make the next compaction announce itself. Verified on Claude Code only:
 Codex plugin-local hooks may not execute yet (openai/codex#16430), the same
 limitation `SessionStart` already carries.
+
+Date/commit if known: 2026-08-24
+
+## DEC-008: Budget the context, and index the one file that grows forever
+
+Status: Accepted
+
+Decision: Give `docs/context/` two reported budgets — 24 KiB per document and
+64 KiB across the set, both flagged at 85% — and have the CLI maintain a
+generated `## Index` at the head of `DECISIONS.md` once it passes six entries.
+Both are reported, never enforced: `context_size` moves into
+`ADVISORY_CHECKS`, and `decisions_index` warns rather than fails.
+
+Why: Context only helps if reading it costs less than the work it informs, and
+nothing measured that. The per-file cap was 32 KiB with no total, so the
+contract silently permitted roughly 190 KiB — around 48k tokens — across the
+set before saying a word. Meanwhile `DECISIONS.md` is the only document that
+grows without limit: the contract forbids deleting a superseded decision, so it
+only ever gets longer, and it was already the largest file here at 14.6 KiB and
+30% of the whole context. But nobody ever needs to *read* it — they need to
+check whether a decision exists before reversing one. That is a lookup being
+paid for as a full read, and an index of the headings turns 14.6 KiB back into
+about 700 bytes.
+
+An index, not a summary. A summary would restate claims, so it could drift on
+its own and would give `review` two places to adjudicate every claim instead of
+one. An index restates only the `## DEC-NNN:` headings that already exist
+verbatim below it, so it can never say anything the document does not already
+say — which is also why generating it is CLI work and not the agent's. It is
+derived structure, and a machine rebuilds it exactly. Markup is stripped from
+the titles so a backticked path in an index line is not read as a citation by
+`drift.py` and reported as dangling from text nobody can hand-fix.
+
+Reported and not enforced because DEC-005 reserves the strict gate for claims
+the repository contradicts. An oversized document is expensive, not wrong, and
+failing a pull request because context grew a kilobyte is exactly the noise
+DEC-005 was written to keep out of the gate. DEC-005 anticipated this choice:
+it requires every new check to be classified deliberately.
+
+Evidence/context: `context_maintainer/decisionindex.py`,
+`context_maintainer/contract.py` (`MAX_CONTEXT_FILE_BYTES`,
+`MAX_CONTEXT_TOTAL_BYTES`, `CONTEXT_SIZE_SOFT_RATIO`),
+`context_maintainer/doctor.py` (`check_context_files_not_oversized`,
+`check_decisions_index_current`), `tests/test_decision_index.py`,
+`references/context-contract.md` "Size budgets". Measurements taken directly
+from this repository on 2026-08-24.
+
+Alternatives considered: a vector or graph index over the documents (rejected —
+it is the retrieval layer this project's non-goals exclude, and retrieval is
+what you build once the store has outgrown the context window, which is the
+premise being defended, not abandoned); a generated summary at the head of each
+document (rejected — it restates claims, so it drifts independently and doubles
+what `review` must adjudicate); splitting the documents into a tree of smaller
+files (rejected — thirty small files cost more to navigate than five compact
+ones; splitting only pays when it separates hot from cold, which archiving
+superseded decisions would, and which buys nothing while every decision here is
+still `Accepted`); enforcing the budgets in `--strict` (rejected per DEC-005 as
+above).
+
+Consequences: Contributors get told when context is getting expensive, early
+enough to act, and are never blocked by it. `DECISIONS.md` acquires a block the
+CLI owns — hand-editing it is pointless, and `doctor` says so. `sync
+--finalize` now writes to a context document, which is new: it is defensible
+only because the block is derived from headings and contains no judgment, and
+that boundary must hold for anything added here later. If a future document
+also grows without limit, it needs the same treatment rather than a bigger
+budget.
 
 Date/commit if known: 2026-08-24
