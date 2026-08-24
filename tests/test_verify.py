@@ -303,11 +303,28 @@ def test_every_advisory_check_name_is_a_real_check():
     assert not unknown, f"ADVISORY_CHECKS names no real check: {unknown}"
 
 
+def _is_shallow(root: Path) -> bool:
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=str(root), capture_output=True, text=True,
+    )
+    return result.stdout.strip() == "true"
+
+
 def test_this_repository_passes_its_own_ci_gate():
-    """The exact command the CI job runs must pass on this repository."""
+    """The exact command the CI job runs must pass on this repository.
+
+    Skipped on a shallow clone: the checkpoint commit legitimately does not
+    exist there, so the failure would be about checkout depth rather than about
+    this repository's context.
+    """
     from context_maintainer import doctor
 
     repo_root = Path(__file__).resolve().parent.parent
+    if _is_shallow(repo_root):
+        pytest.skip("shallow clone: checkpoint history unavailable")
     report = doctor.run_all_checks(repo_root, verify=True)
     assert not report.failed(strict=True), [
         r.to_dict() for r in report.results
