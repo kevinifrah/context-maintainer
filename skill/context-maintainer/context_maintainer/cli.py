@@ -757,6 +757,51 @@ def _states_context_conclusion(message: str) -> bool:
     return any(marker in lowered for marker in _CONCLUSION_MARKERS)
 
 
+#: Where the last context ruling is remembered, keyed by the commit it was made
+#: for. Gitignored and disposable, like everything else under `cache/`.
+_RULING_MARKER = "last-context-ruling"
+
+
+def _ruling_path(root: Path) -> Path:
+    return root / contract.CACHE_DIR / _RULING_MARKER
+
+
+def _already_ruled(root: Path, head: Optional[str]) -> bool:
+    if not head:
+        return False
+    try:
+        return _ruling_path(root).read_text(encoding="utf-8").strip() == head
+    except Exception:
+        return False
+
+
+def _remember_ruling(root: Path, head: Optional[str]) -> None:
+    """Record that this commit has been ruled on, so the ask is not repeated.
+
+    Without this the `Stop` hook asks once per turn, forever, because its
+    trigger — a commit past the context checkpoint — stays true until someone
+    runs `sync --finalize`. Answering it would not make it stop. That is
+    DEC-004's nagging objection arriving through the side door, and it showed up
+    the first time the hook ran for real.
+
+    This is the one thing a hook here writes, and the exception is narrow on
+    purpose: a disposable marker in the gitignored cache, never a context
+    document, never the manifest, never an attestation. Deleting the cache
+    costs one extra question. DEC-007's rule is about not marking context
+    reviewed when nobody reviewed it, and a marker saying "someone was asked
+    about commit X" claims nothing about whether the documents are correct.
+    """
+    if not head:
+        return
+    try:
+        path = _ruling_path(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(head + "\n", encoding="utf-8")
+    except Exception:
+        # A hook must never disrupt a session. Worst case it asks again.
+        pass
+
+
 def stop_notice(
     root: Path, last_message: str = "", stop_hook_active: bool = False
 ) -> Optional[str]:
@@ -775,11 +820,24 @@ def stop_notice(
     is deliberately not a trigger: that is normal mid-task state, and blocking on
     it would nag every turn, which is DEC-004's objection restated.
 
-    Three ways to stay silent, and it takes all three failing to speak:
+    Four ways to stay silent, and it takes all four failing to speak:
     `stop_hook_active` (already blocked once this turn — never loop), a turn that
-    already ruled on context, and nothing committed past the checkpoint.
+    rules on context now, a ruling already given for this commit, and nothing
+    committed past the checkpoint.
+
+    The third is what keeps it from nagging. The trigger stays true until
+    someone runs `sync --finalize`, so without a memory the hook would ask again
+    every turn and answering it would not help — which is exactly what happened
+    the first time it ran for real.
     """
-    if stop_hook_active or _states_context_conclusion(last_message):
+    if stop_hook_active:
+        return None
+
+    head = gitutil.get_head_commit(root)
+    if _states_context_conclusion(last_message):
+        _remember_ruling(root, head)
+        return None
+    if _already_ruled(root, head):
         return None
 
     try:

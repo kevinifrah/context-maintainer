@@ -927,8 +927,15 @@ def _detect_completed_intent(
             ]
             released = [v for v in named if v in tagged]
 
-            # A claim that something is unreleased, contradicted by a tag.
-            if released and _UNRELEASED_CLAIM.search(sentence):
+            # A claim that something is unreleased, contradicted by a tag —
+            # but only when every version in the sentence is tagged. If one is
+            # not, the negation almost certainly belongs to *that* version and
+            # the tagged one is context: "v0.6.0 is not tagged; the newest tag
+            # is v0.5.1" is true, and flagging v0.5.1 there reads the sentence
+            # backwards. Ambiguity should not produce a finding.
+            if released and len(released) == len(named) and _UNRELEASED_CLAIM.search(
+                sentence
+            ):
                 findings.append(
                     _intent_finding(
                         block,

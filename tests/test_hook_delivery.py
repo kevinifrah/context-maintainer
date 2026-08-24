@@ -295,7 +295,80 @@ def test_stop_ignores_context_only_commits(tmp_path: Path):
     assert out == ""
 
 
-def test_stop_never_writes(tmp_path: Path):
+def test_stop_asks_once_per_commit_not_once_per_turn(tmp_path: Path):
+    """The defect the first real run exposed, and the reason v0.6.0 waited.
+
+    The trigger — a commit past the checkpoint — stays true until someone runs
+    `sync --finalize`. `stop_hook_active` only guards within a turn, so the hook
+    blocked, was answered, and blocked again on the next turn, and answering it
+    never helped. That is DEC-004's nagging objection arriving through the side
+    door.
+    """
+    repo = _worked(_settled(tmp_path))
+
+    _code, first = run_hook(repo, "stop", {"stop_hook_active": False})
+    assert first.strip(), "expected the first turn to ask"
+
+    # The agent answers, as it did in the real trace.
+    _code, answered = run_hook(
+        repo,
+        "stop",
+        {"stop_hook_active": False, "last_assistant_message": "No context update needed."},
+    )
+    assert answered == ""
+
+    # Every turn after that stays quiet, even saying nothing about context.
+    for turn in range(3):
+        _code, later = run_hook(
+            repo,
+            "stop",
+            {"stop_hook_active": False, "last_assistant_message": "Here is the answer."},
+        )
+        assert later == "", f"asked again on turn {turn + 2} after being answered"
+
+
+def test_stop_asks_again_once_new_work_is_committed(tmp_path: Path):
+    """The memory is per commit, not permanent — or it would silence itself."""
+    repo = _worked(_settled(tmp_path))
+    run_hook(
+        repo,
+        "stop",
+        {"stop_hook_active": False, "last_assistant_message": "No context update needed."},
+    )
+
+    write(repo, "src/writer.py", "def write():\n    return None\n")
+    commit(repo, "Add the writer")
+
+    _code, out = run_hook(repo, "stop", {"stop_hook_active": False})
+
+    assert out.strip(), "new committed work did not earn a fresh ruling"
+
+
+def test_stop_writes_nothing_outside_the_disposable_cache(tmp_path: Path):
+    """The one write is a marker in `cache/`. Nothing else may move.
+
+    Not a relaxation of DEC-007: a marker recording "someone was asked about
+    commit X" claims nothing about whether the documents are correct, which is
+    the thing DEC-007 forbids asserting without review.
+    """
+    repo = _worked(_settled(tmp_path))
+    before = _fingerprint(repo)
+
+    run_hook(
+        repo,
+        "stop",
+        {"stop_hook_active": False, "last_assistant_message": "No context update needed."},
+    )
+
+    after = _fingerprint(repo)
+    changed = {
+        path for path in set(before) | set(after) if before.get(path) != after.get(path)
+    }
+    assert changed == {".context-maintainer/cache/last-context-ruling"}, changed
+
+
+def test_stop_writes_nothing_at_all_when_it_blocks(tmp_path: Path):
+    """Asking costs nothing on disk. Only an answer is worth remembering."""
     repo = _worked(_settled(tmp_path))
     before = _fingerprint(repo)
 

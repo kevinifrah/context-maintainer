@@ -62,8 +62,8 @@ Skill-side: `SKILL.md` (the only real copy; the one under
 test enforces this) plus `references/{audit-protocol,context-contract,
 evidence-policy,sync-policy,mcp-companion}.md`.
 
-Hook-side: `hooks/hooks.json` registers two non-blocking hooks,
-auto-discovered by both hosts from the plugin root. Each runs a thin shell
+Hook-side: `hooks/hooks.json` registers three hooks, auto-discovered by both
+hosts from the plugin root. Two inform; `Stop` blocks. Each runs a thin shell
 wrapper over a `cli.py` `hook` subcommand, and each stays silent unless there is
 something to act on. **Where a notice goes differs by event, and getting it
 wrong is silent** — the hook runs, the text is built, and nobody reads it (see
@@ -81,10 +81,13 @@ DEC-009):
   reaches the agent: the host hands the reason back and the turn continues
   rather than ending. The one registered hook that blocks. Speaks when a commit
   has landed past the context checkpoint and the turn has not ruled on whether
-  project reality changed. Three guards, all of which must fail before it
-  speaks: the host's `stop_hook_active` (already blocked once this turn — the
-  loop guard), a `last_assistant_message` that already ruled, and nothing
-  committed past the checkpoint. Uncommitted work is deliberately not a
+  project reality changed. Four guards, all of which must fail before it
+  speaks: the host's `stop_hook_active` (already blocked once this turn), a
+  `last_assistant_message` that rules now, a ruling already recorded for this
+  commit, and nothing committed past the checkpoint. The third is what stops it
+  nagging — the trigger stays true until `sync --finalize` runs, so the ruling
+  is remembered in a disposable cache marker keyed by commit. That marker is the
+  only thing any hook here writes. Uncommitted work is deliberately not a
   trigger. See DEC-011.
 - `PreCompact` (v0.5.0) → `hooks/pre-compact.sh` → `hook pre-compact`. Prints a
   **JSON envelope carrying `systemMessage`**, because the compaction machinery
@@ -98,16 +101,21 @@ DEC-009):
   moved evidence. Changes under `docs/context/` and `.context-maintainer/` are
   excluded, so a `sync` does not make the next compaction announce itself.
 
-Both read the host's hook payload from stdin (`cli._hook_payload`), which is how
-`SessionStart` learns its source; a hook run by hand from a terminal gets `{}`
-rather than blocking on a tty. Neither writes anything — see DEC-007.
+All three read the host's hook payload from stdin (`cli._hook_payload`), which
+is how `SessionStart` learns its source and `Stop` learns `stop_hook_active`; a
+hook run by hand from a terminal gets `{}` rather than blocking on a tty. None
+of them writes a context document, the manifest, or an attestation — see
+DEC-007. The single exception is `Stop`'s ruling marker under
+`.context-maintainer/cache/`, which is gitignored, disposable, and asserts only
+that a question was asked, never that a document is correct (DEC-011).
 CONFIRMED by direct reading and by `tests/test_session_start_hook.py`,
 `tests/test_pre_compact_hook.py`, `tests/test_hook_delivery.py`.
 
-Deliberately absent: a `Stop` hook. Its only channel to the model is
-`decision: "block"`, which would interrupt every turn and risks a loop, so
-the per-turn "did this change project reality?" question is handled by
-instructions in `AGENTS.md` and `SKILL.md` instead of a hook. See DEC-004.
+Deliberately absent: any hook on a per-turn event other than `Stop`, and any
+`Stop` trigger looser than a commit past the checkpoint. DEC-004 rejected a
+per-turn prompt because the sync policy's default answer is "update nothing",
+so one that fired on every turn would train dismissal; DEC-011 takes the
+narrower trigger DEC-004 left open rather than reversing it.
 
 ## Data Flow
 

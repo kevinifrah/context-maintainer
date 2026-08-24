@@ -8,14 +8,17 @@ decisions live in DECISIONS.md.
 
 ## Phase
 
-v0.5.1 is tagged and is the newest release; the installed plugin still runs
-v0.5.0 until the marketplace is refreshed. v0.4.0's drift detection and
-`review` worklist are dogfooded here; v0.5.0 added a `PreCompact` hook, a
-convention for recording abandoned approaches, and size budgets with a
-generated `DECISIONS.md` index; v0.5.1 fixed how those hook notices are
-delivered, because the v0.5.0 `PreCompact` notice reached nobody (DEC-009).
-Work in the tree since then adds `COMPLETED_INTENT` detection (DEC-010).
-CONFIRMED: `git tag`, `CHANGELOG.md`, `pyproject.toml`.
+v0.6.0 is committed on `main` and installed as the working plugin, but is
+deliberately **not tagged**: the newest tag is v0.5.1. Tagging waits until the
+`Stop` hook is proven in real use, because v0.5.0 shipped a `PreCompact` hook
+that passed every unit test and reached nobody (DEC-009).
+
+v0.4.0's drift detection and `review` worklist are dogfooded here; v0.5.0 added
+a `PreCompact` hook, a convention for recording abandoned approaches, and size
+budgets with a generated `DECISIONS.md` index; v0.5.1 fixed how those hook
+notices are delivered; v0.6.0 adds the `Stop` hook (DEC-011) and
+`COMPLETED_INTENT` detection (DEC-010). CONFIRMED: `git tag`, `CHANGELOG.md`,
+`pyproject.toml`.
 
 ## Objective
 
@@ -128,9 +131,15 @@ including the two this section previously contained.
 The `Stop` hook is the actuator (DEC-011): when a commit lands past the context
 checkpoint and the turn has not ruled on context, it blocks the turn and hands
 the agent a reason. No API key, no CI, no cost — the agent already in the
-session does the work. Verified by hand and by `tests/test_hook_delivery.py`,
-but not yet observed firing during real work, which needs the plugin reinstalled
-at v0.6.0.
+session does the work. **Observed working**: on 2026-08-24 it blocked a real
+turn, was answered in one sentence, and released — exactly one block, loop guard
+intact.
+
+That run also exposed a defect the tests had not: the trigger stays true until
+`sync --finalize` runs, so the hook asked again every turn and answering it did
+not help. Fixed by remembering the ruling against the commit it was given for,
+in a disposable cache marker. That fix is tested but has not itself been
+observed in real use.
 
 A CI workflow driving a fresh agent through an API key was built during this
 work and removed before release (DEC-010, superseded in part by DEC-011). It

@@ -553,10 +553,15 @@ an action regardless of what Claude decides, use a hook instead."
 
 It fires only when a commit has landed past the context checkpoint. Uncommitted
 work is deliberately not a trigger: mid-task is the normal state, and a hook
-that fired on every edit is the nagging this design has refused twice. Three
+that fired on every edit is the nagging this design has refused twice. Four
 guards must all fail before it speaks — it never blocks twice in a turn, never
-blocks a turn that already ruled on context, and never blocks when nothing has
-been committed past the checkpoint.
+blocks a turn that rules on context, never asks twice about the same commit, and
+never blocks when nothing has been committed past the checkpoint.
+
+That third guard was learned from the first real run: it blocked, was answered,
+and blocked again next turn, because the trigger stays true until `sync
+--finalize` runs and answering it changed nothing. Now the answer is remembered
+against the commit it was given for. New commits earn a fresh question.
 
 **No API key, no CI, no cost.** The agent already in your session does the work.
 
@@ -565,8 +570,11 @@ All four notices share three deliberate constraints:
 - **Silent unless it matters.** No notice in projects that never adopted
   Context Maintainer, and none when context is already current. A hook that
   speaks every time gets ignored.
-- **Never writes.** Detection only. The prose is still written by the agent,
-  in session, where you can see and correct it.
+- **Never writes a document.** No context file, no manifest, no attestation.
+  The prose is still written by the agent, in session, where you can see and
+  correct it. The one thing that touches disk is the `Stop` hook remembering
+  which commit it already asked about, in the gitignored cache — so answering
+  it once is enough. Delete the cache and it asks again.
 - **Never disrupts a session.** They always exit 0 — a broken environment,
   a corrupt manifest, or a missing interpreter produces silence, not an error.
   The `Stop` hook continues a turn; it never fails one.

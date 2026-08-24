@@ -640,3 +640,38 @@ def test_a_claim_that_a_tagged_version_is_unreleased_is_flagged(git_repo: Path):
     findings = _intents(root)
     assert findings, "a tag did not contradict a claim that nothing was tagged"
     assert "unreleased" in findings[0].detail
+
+
+def test_an_unreleased_claim_about_a_newer_version_is_not_about_the_tagged_one(
+    git_repo: Path,
+):
+    """A false positive this repository's own Phase section produced.
+
+    "v0.6.0 is not tagged; the newest tag is v0.5.1" is true, and both versions
+    are in one sentence. Taking the tagged one as the subject of the negation
+    reads the sentence backwards. When any named version is untagged the
+    negation plausibly belongs to it, and ambiguity must not produce a finding.
+    """
+    root = _project(git_repo)
+    _set_state(
+        root,
+        "Phase",
+        "v0.9.0 is committed but deliberately not tagged: the newest tag is "
+        "v0.2.0.",
+    )
+    commit_all(root, "Describe the phase")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert not _intents(root), [f.to_dict() for f in _intents(root)]
+
+
+def test_an_unreleased_claim_still_fires_when_every_version_named_is_tagged(
+    git_repo: Path,
+):
+    """The guard above must not smother the true positive it sits next to."""
+    root = _project(git_repo)
+    _set_state(root, "Phase", "v0.2.0 is written but unreleased: no tag yet.")
+    commit_all(root, "Describe the phase")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert _intents(root)

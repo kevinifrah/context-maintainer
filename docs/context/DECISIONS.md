@@ -539,10 +539,25 @@ vocabulary, the failure DEC-006 names; the phrase list is used only to suppress
 a block, where a miss costs one extra question and an over-match costs nothing).
 
 Consequences: One registered hook can now block, and the hooks test asserts
-exactly which three events are registered so a fourth has to be argued for. The loop guard is the host's `stop_hook_active`: the CLI goes silent
-when it is set, so a block can never repeat within a turn. The block is
-answerable in one sentence — "no context update needed" ends it — and that is
-the intended common outcome, not a failure. Codex has no `Stop` equivalent
+exactly which three events are registered so a fourth has to be argued for.
+
+Two guards keep the block from becoming nagging, and the second was learned the
+hard way. The host's `stop_hook_active` stops a block repeating *within* a turn.
+It does not stop it repeating *across* turns, because the trigger stays true
+until someone runs `sync --finalize` — so the first real run blocked, was
+answered, and blocked again next turn, with answering it changing nothing. The
+fix is a marker in the gitignored cache recording the commit a ruling was given
+for; new commits earn a fresh question, the same commit does not.
+
+That marker is the one thing a hook here writes, and it is a narrow, deliberate
+exception to DEC-007's "never writes": a disposable file saying "someone was
+asked about commit X", never a context document, never the manifest, never an
+attestation. It asserts nothing about whether the documents are correct, which
+is the thing DEC-007 exists to prevent claiming without review. Deleting the
+cache costs one extra question.
+
+The block is answerable in one sentence — "no context update needed" ends it —
+and that is the intended common outcome, not a failure. Codex has no `Stop` equivalent
 wired, so this is Claude Code only, the same limitation the other hooks carry.
 An agent can still satisfy the hook dishonestly by saying the words without
 looking; that is DEC-006's blind spot again, and no hook closes it.

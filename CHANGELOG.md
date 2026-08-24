@@ -21,7 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the turn and hands the agent a reason. This is the enforcement layer the
   instructions never had: `AGENTS.md` has asked for a context conclusion since
   v0.2.0, and this repository still went three releases stale. Answerable in one
-  sentence — "no context update needed" ends it. See DEC-011.
+  sentence — "no context update needed" ends it, and the answer is remembered
+  against that commit so the same question is not asked again next turn. See
+  DEC-011.
+
 Not shipped, and recorded so it is not re-proposed: a `context-sync` CI workflow
 that drove a fresh agent through an `ANTHROPIC_API_KEY` to open correction pull
 requests. Built during this work and removed before release — it costs money per
@@ -36,6 +39,12 @@ part by DEC-011.
   context document mentions" and silently disabled `VERSION_DRIFT` — a
   DEFECT-severity check — for the whole repository. Versions are now filtered to
   those sharing a major with an existing tag.
+- `COMPLETED_INTENT` no longer reads a sentence backwards. "v0.6.0 is not
+  tagged; the newest tag is v0.5.1" names two versions, and taking the tagged
+  one as the subject of the negation produced a false positive on this
+  repository's own Phase section. When any version in the sentence is untagged
+  the negation plausibly belongs to it, and ambiguity does not produce a
+  finding.
 - The per-document size budget charges an indexed `DECISIONS.md` its read cost
   (index plus largest entry) rather than its size on disk. An append-only
   document collides with a fixed byte cap on a fixed schedule, and the index

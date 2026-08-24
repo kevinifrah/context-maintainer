@@ -9,13 +9,19 @@
 # turn. It does not hold against asking once, at a moment the repository can
 # point to — a commit past the context checkpoint. See DEC-011.
 #
-# Same contract as the other hooks, plus one addition:
+# Same contract as the other hooks, with one addition and one exception:
 #   - Always exit 0. A hook must never disrupt a session.
-#   - Never write anything. Detection only.
 #   - Print nothing unless there is something worth acting on.
 #   - Never block twice for the same turn. The host sets `stop_hook_active`
 #     once this hook has already blocked; the CLI reads it and goes quiet,
 #     which is what keeps a block from becoming a loop.
+#   - Never block twice for the same *commit* either. This is the addition, and
+#     it is not optional: the trigger stays true until someone runs `sync
+#     --finalize`, so without it the hook asks every turn and answering it does
+#     not help. The first real run did exactly that.
+#   - The exception: to remember an answer it writes one disposable marker under
+#     .context-maintainer/cache/, which is gitignored. Never a context document,
+#     never the manifest, never an attestation.
 set -u
 
 # ${CLAUDE_PLUGIN_ROOT} is set by Claude Code and aliased by Codex. Fall back to
