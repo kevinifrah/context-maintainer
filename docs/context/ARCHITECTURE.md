@@ -184,7 +184,7 @@ the README and direct file listing support, not verified via
 Confidence is otherwise high despite the degraded audit, because this
 project's own README and CONTRIBUTING.md are unusually thorough,
 self-describing, and specific (they document their own architecture,
-Contributing.md documents the doctor-check and contract-change conventions),
+CONTRIBUTING.md documents the doctor-check and contract-change conventions),
 and the test suite (415 passing, run directly via `pytest -q` on 2026-08-24)
 corroborates the documented behavior rather than merely asserting it.
 Where a claim rests only on documentation without independent corroboration,

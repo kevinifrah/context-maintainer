@@ -307,6 +307,25 @@ class RepoIndex:
         for directory in sorted(self.dirs):
             self._by_name.setdefault(directory.rsplit("/", 1)[-1], directory)
 
+    def _exists_exactly(self, candidate: str) -> bool:
+        """Does this path exist with exactly this spelling?
+
+        `Path.exists()` is case-insensitive on macOS and Windows, so a citation
+        to `Contributing.md` resolves happily on a laptop and fails on a Linux
+        CI runner. Findings that depend on the developer's filesystem are worse
+        than no findings — this caught a real miscased citation in this
+        repository only after CI disagreed with a local run.
+        """
+        import os
+
+        path = self.root / candidate
+        if not path.exists():
+            return False
+        try:
+            return path.name in os.listdir(path.parent)
+        except OSError:
+            return False
+
     def resolve(self, value: str) -> Optional[str]:
         """The real repo-relative path a citation names, or None."""
         # `@AGENTS.md` is Claude Code's import directive, not a filename.
@@ -315,7 +334,7 @@ class RepoIndex:
             return None
         if candidate in self.files or candidate in self.dirs:
             return candidate
-        if (self.root / candidate).exists():
+        if self._exists_exactly(candidate):
             return candidate
         if "/" in candidate:
             suffix = "/" + candidate

@@ -55,6 +55,13 @@ Nothing in a diff points at a sentence that quietly stopped being true.
   true when a decision was taken, and re-checking it against today's repository
   would ask authors to rewrite history the contract forbids rewriting.
 
+### Fixed
+- Citation resolution is case-sensitive everywhere. `Path.exists()` folds case
+  on macOS and Windows, so a miscased citation resolved on a laptop and failed
+  on a Linux CI runner — findings that depend on the developer's filesystem are
+  worse than no findings. Caught by this repository's own CI, on a real
+  miscased citation in `ARCHITECTURE.md`.
+
 ## [0.3.0] — 2026-08-24
 
 The release that makes context *checkable* rather than merely well-formed.

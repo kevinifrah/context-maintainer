@@ -161,6 +161,23 @@ def test_directory_and_import_citations_resolve(git_repo: Path, phrase: str):
     assert not drift.analyse(root).defects
 
 
+def test_a_miscased_citation_is_a_defect_on_every_filesystem(git_repo: Path):
+    """Findings must not depend on whether the developer's disk folds case.
+
+    `Path.exists()` says yes to `Src/Auth.py` on macOS and no on Linux. A real
+    miscased citation in this repository passed locally and failed in CI before
+    this was fixed.
+    """
+    root = _project(git_repo)
+    _set_section(root, "Components", "Login lives in `Src/Auth.py`.")
+    commit_all(root, "Cite with the wrong case")
+
+    defects = drift.analyse(root).defects
+    assert any("Src/Auth.py" in f.detail for f in defects), [
+        f.to_dict() for f in defects
+    ]
+
+
 def test_citation_to_a_commit_outside_history_is_a_defect(git_repo: Path):
     root = _project(git_repo)
     _set_section(root, "Overview", "Rewritten in commit deadbe1 — CONFIRMED.")
