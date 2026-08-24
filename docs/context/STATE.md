@@ -8,14 +8,14 @@ decisions live in DECISIONS.md.
 
 ## Phase
 
-v0.5.0 is released and installed from the `kevinifrah` marketplace; v0.5.1 is
-in the working tree, untagged. v0.4.0's drift detection and `review` worklist
-are dogfooded here; v0.5.0 added a `PreCompact` hook, a convention for
-recording abandoned approaches, and size budgets with a generated
-`DECISIONS.md` index. v0.5.1 fixes how those hook notices are delivered — the
-v0.5.0 `PreCompact` notice reached nobody (DEC-009). Version strings read
-0.5.1; v0.5.0 is the newest tag. CONFIRMED: `git tag`, `CHANGELOG.md`,
-`pyproject.toml`.
+v0.5.1 is tagged and is the newest release; the installed plugin still runs
+v0.5.0 until the marketplace is refreshed. v0.4.0's drift detection and
+`review` worklist are dogfooded here; v0.5.0 added a `PreCompact` hook, a
+convention for recording abandoned approaches, and size budgets with a
+generated `DECISIONS.md` index; v0.5.1 fixed how those hook notices are
+delivered, because the v0.5.0 `PreCompact` notice reached nobody (DEC-009).
+Work in the tree since then adds `COMPLETED_INTENT` detection (DEC-010).
+CONFIRMED: `git tag`, `CHANGELOG.md`, `pyproject.toml`.
 
 ## Objective
 
@@ -50,12 +50,23 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
   plus (v0.3.0) an optional `doctor --verify` pass that checks documented
   commands/technologies against repository evidence
   (CONFIRMED/UNVERIFIED/CONTRADICTED).
+- Self-maintenance (v0.6.0): a `Stop` hook blocks the end of a turn when a
+  commit has landed past the context checkpoint and the turn has not ruled on
+  whether project reality changed — the enforcement layer DEC-004 left open,
+  now taken because instructions demonstrably were not enough.
+  `COMPLETED_INTENT` reports plans the repository
+  shows are already carried out — the one drift class evidence-movement
+  detection cannot see, because a plan cites nothing. `review --exit-code` lets
+  automation gate on it. CONFIRMED: `cli.stop_notice`,
+  `skill/context-maintainer/hooks/stop.sh`,
+  `drift._detect_completed_intent`, DEC-011.
 - Narrative drift detection (v0.4.0): `drift.py` and `context-maintainer
   review` parse the citations in each context document, resolve them against a
   repository path index, and compare them to the per-citation baseline in
   `.context-maintainer/evidence.json`, re-stamped by `sync --finalize`.
   Reported as DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE,
-  VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED. `doctor --verify`
+  VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED,
+  COMPLETED_INTENT. `doctor --verify`
   fails on the unambiguous kinds only; the rest is worklist, not gate.
 - A `PreCompact` hook (v0.5.0): `hooks/pre-compact.sh` and `cli.py`'s `hook
   pre-compact` report what a session has not written down — uncommitted source
@@ -104,9 +115,28 @@ CONFIRMED by direct reading and by running the test suite (`pytest -q`,
 
 ## In Progress
 
-v0.5.1 is written and green but unreleased: no tag, and the marketplace has not
-been updated. v0.4.0 was never tagged; its changes shipped inside v0.5.0.
-CONFIRMED: `git tag` shows v0.5.0 as newest.
+Closing the gap between *detecting* staleness and *fixing* it — the thing that
+makes this a maintainer rather than a linter.
+
+Both halves are written and green (DEC-010), and neither is proven in the wild.
+
+`COMPLETED_INTENT` is the detector: a finished plan cites nothing, so no
+evidence can move underneath it and every other detector here is blind to it by
+construction. It found three stale claims in this file on its first run,
+including the two this section previously contained.
+
+The `Stop` hook is the actuator (DEC-011): when a commit lands past the context
+checkpoint and the turn has not ruled on context, it blocks the turn and hands
+the agent a reason. No API key, no CI, no cost — the agent already in the
+session does the work. Verified by hand and by `tests/test_hook_delivery.py`,
+but not yet observed firing during real work, which needs the plugin reinstalled
+at v0.6.0.
+
+A CI workflow driving a fresh agent through an API key was built during this
+work and removed before release (DEC-010, superseded in part by DEC-011). It
+never ran. What it would have covered and the `Stop` hook does not — claims that
+go stale with no commit at all — is still uncovered, and is a real gap rather
+than a solved problem.
 
 ## Blockers
 
@@ -114,12 +144,11 @@ None. CONFIRMED (user, 2026-08-24).
 
 ## Next
 
-Release the accumulated work (tag, marketplace update), then validate that
+Build the self-healing pull-request loop (DEC-010), then validate that
 generated context is *accurate* on projects other than this one — still the
 main unproven claim, and still the priority. CONFIRMED (user, 2026-08-24).
 
-v0.4.0 changed what "validate accuracy" now means. Accuracy has two failure
-modes and they need different evidence:
+Accuracy has two failure modes and they need different evidence:
 
 - **Does the tooling catch drift it should?** Partly answered here.
   Development of v0.4.0 was itself the first test: `review` found a stale test
@@ -142,15 +171,21 @@ Specifically outstanding:
   the vocabulary it was written against; that trade raises recall and lowers
   precision, and the precision cost has only been measured here (two added
   findings, both real).
-- The v0.5.1 hook delivery fix is verified by tests and by hand, but the
-  post-compaction `SessionStart` notice has not been observed arriving during a
-  real compaction. That is the only check that proves it is wired rather than
-  merely correct — and it is exactly the check v0.5.0 skipped, which is how a
-  hook that reached nobody passed its whole unit suite. It also rests on one unverified
-  assumption: that Claude Code re-fires `SessionStart` with `source: "compact"`
-  after an in-session compaction, rather than only when resuming a compacted
-  session. The documented matcher list includes `compact`, but the behaviour
-  has not been observed here.
+- The v0.5.1 hook delivery fix is verified by tests and by hand, and its one
+  open assumption is now closed: a diagnostic `SessionStart` hook recorded
+  `{"hook_event_name": "SessionStart", "source": "compact"}` for the same
+  `session_id` that had just been compacted, so the event does re-fire
+  in-session rather than only on resuming a compacted session. What has *not*
+  been observed is the v0.5.1 wording arriving during a real compaction: the
+  installed plugin is still v0.5.0 (`~/.claude/plugins/installed_plugins.json`,
+  commit `1a4fe0e`), so the notice that arrived was v0.5.0's stale-context text.
+  That check needs a release first.
+- Untested consequence of the v0.5.1 envelope: on a manual `/compact` the host
+  echoes a `PreCompact` hook's raw stdout into the transcript. Under v0.5.0 that
+  echoed the notice as prose; under v0.5.1 it will echo `{"systemMessage": …}`
+  as literal JSON. Cosmetic rather than harmful — the agent-facing report now
+  arrives via `SessionStart` regardless — but it should be looked at on release,
+  not assumed.
 - A cold install by someone with no local checkout has never been exercised;
   every install so far happened on the machine holding the repository.
 - Codex plugin-local hooks may not execute yet (openai/codex#16430), so the

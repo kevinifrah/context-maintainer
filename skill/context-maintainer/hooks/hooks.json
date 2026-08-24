@@ -1,5 +1,5 @@
 {
-  "description": "Tells the agent when a project's docs/context/ has fallen behind its code, so stale context is noticed at the start of a session rather than trusted by accident, and reminds it to record what a session learned before compaction discards it.",
+  "description": "Tells the agent when a project's docs/context/ has fallen behind its code, so stale context is noticed at the start of a session rather than trusted by accident; reminds it to record what a session learned before compaction discards it; and, when committed work has outrun the documents, asks it to rule on whether project reality changed before the turn ends.",
   "hooks": {
     "SessionStart": [
       {
@@ -21,6 +21,18 @@
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact.sh\"",
             "timeout": 20,
             "statusMessage": "Checking for unrecorded project context"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/stop.sh\"",
+            "timeout": 20,
+            "statusMessage": "Checking whether context needs updating"
           }
         ]
       }

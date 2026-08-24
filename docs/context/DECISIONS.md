@@ -18,6 +18,8 @@ link to the decision that replaced it.
 - DEC-007 (Accepted) — A PreCompact hook that informs, and never attests
 - DEC-008 (Accepted) — Budget the context, and index the one file that grows forever
 - DEC-009 (Accepted) — Deliver each hook notice by the channel its event actually has
+- DEC-010 (Accepted in part — the CI workflow is superseded by DEC-011) — Detect finished plans, and propose fixes as a pull request
+- DEC-011 (Accepted) — Enforce the context ruling with a Stop hook, not a paid CI loop
 
 ## DEC-001: Adopted the Context Maintainer contract
 
@@ -62,11 +64,9 @@ writing into 43 different AI-agent tool configurations, and repository
 content that triggered prompt-injection defenses during research.
 
 Evidence/context: README.md "How Repomix is used" → "A security note worth
-reading"; CONTRIBUTING.md "Reporting security issues". Documented in the
-repository from early on; the exact original evaluation commit is not
-separately identified, so the timing is INFERRED from when the security
-note first appears in README history rather than confirmed against a
-specific commit.
+reading"; CONTRIBUTING.md "Reporting security issues". Timing is INFERRED from
+when that note first appears in README history, not confirmed against a
+commit.
 
 Alternatives considered: `DeusData/codebase-memory-mcp` (rejected, see
 above); no structural-verification backend at all (the current fallback —
@@ -225,13 +225,12 @@ content hashes instead of per-document attestation (rejected — any rewording
 loses the attestation and the state grows without bound); compute staleness
 against the sync checkpoint rather than per citation (rejected — it would flag
 every claim on every commit, and a signal that fires constantly is a signal that
-gets switched off); fail CI on the whole worklist (tried, and reverted the same day
-after this repository's CI demonstrated the flaw: a commit editing `drift.py`
-turned eleven claims stale and failed the build, and the cheapest way back to
-green was `sync --finalize` with no re-reading — so the gate would have paid
+gets switched off); fail CI on the whole worklist (tried, and reverted the same day: a
+commit editing `drift.py` turned eleven claims stale, and the cheapest way back
+to green was `sync --finalize` with no re-reading — the gate would have paid
 contributors to perform exactly the blind attestation named below as this
 design's blind spot. `context_drift` now sits in `ADVISORY_CHECKS`, which
-suppresses WARN promotion while leaving its FAIL fully enforcing).
+suppresses WARN promotion while leaving its FAIL enforcing).
 
 Consequences: Attestation is per document, so an agent *can* re-stamp without
 genuinely re-reading each claim; the mechanics localize and demand, but cannot
@@ -306,14 +305,11 @@ check whether a decision exists before reversing one. That is a lookup being
 paid for as a full read, and an index of the headings turns 14.6 KiB back into
 about 700 bytes.
 
-An index, not a summary. A summary would restate claims, so it could drift on
-its own and would give `review` two places to adjudicate every claim instead of
-one. An index restates only the `## DEC-NNN:` headings that already exist
-verbatim below it, so it can never say anything the document does not already
-say — which is also why generating it is CLI work and not the agent's. It is
-derived structure, and a machine rebuilds it exactly. Markup is stripped from
-the titles so a backticked path in an index line is not read as a citation by
-`drift.py` and reported as dangling from text nobody can hand-fix.
+An index, not a summary: it restates only the `## DEC-NNN:` headings that
+already exist verbatim below it, so it can never say anything the document does
+not. That is why the CLI owns it rather than the agent — it is derived
+structure a machine rebuilds exactly. Markup is stripped from the titles so a
+backticked path in an index line is not read as a citation by `drift.py`.
 
 Reported and not enforced because DEC-005 reserves the strict gate for claims
 the repository contradicts. An oversized document is expensive, not wrong, and
@@ -340,6 +336,14 @@ ones; splitting only pays when it separates hot from cold, which archiving
 superseded decisions would, and which buys nothing while every decision here is
 still `Accepted`); enforcing the budgets in `--strict` (rejected per DEC-005 as
 above).
+
+Revised 2026-08-24 (DEC-010): the per-document cap charges an indexed
+`DECISIONS.md` its *read* cost — index plus largest entry — not its size on
+disk. Adding DEC-010 put the file 1.6 KiB over a cap whose only exits were
+deleting reasoning or raising the budget, both argued against above. Charging
+bytes nobody reads was the actual error: this document is append-only by
+contract, so a fixed byte cap collides with it on a fixed schedule. Every other
+document is still charged in full, because they are read whole.
 
 Consequences: Contributors get told when context is getting expensive, early
 enough to act, and are never blocked by it. `DECISIONS.md` acquires a block the
@@ -378,16 +382,26 @@ noise argument DEC-004 and DEC-007 both turned on.
 
 Evidence/context: `cli._hook_payload`, `cli.cmd_hook`, `cli._compacted_notice`,
 `skill/context-maintainer/hooks/pre-compact.sh`,
-`tests/test_hook_delivery.py`. CONFIRMED by inspecting this repository's own
-session transcript across a real `/compact`: the compaction boundary carried no
-hook output in either direction. Also confirmed against the hooks documentation
-at https://code.claude.com/docs/en/hooks.
+`tests/test_hook_delivery.py`. The channel rule is CONFIRMED against the hooks
+documentation at https://code.claude.com/docs/en/hooks. The `source == "compact"`
+re-fire is CONFIRMED by a diagnostic hook that logged
+`{"hook_event_name": "SessionStart", "source": "compact"}` for the same
+`session_id` that had just been compacted in-session.
 
-Alternatives considered: printing plain text from `PreCompact` — tried, shipped
-in v0.5.0, and abandoned once a real compaction showed the notice reaching
-nothing. It is recorded because it is the obvious implementation, it looks
-correct in every unit test, and a future change that "simplifies" the JSON
-envelope away would silently reintroduce it. Also considered moving the notice
+Correction: this entry originally claimed v0.5.0's notice had been observed
+reaching nobody. It had not. That compaction ran in a session whose hook
+registry predated v0.5.0's install, so the hook never ran — the transcript
+records a bare `Compacted `. Plain text was never shown to fail; it was never
+exercised. The decision rests on the documentation and the auto-compaction case
+below, not on that observation.
+
+Alternatives considered: printing plain text from `PreCompact` — shipped in
+v0.5.0 and superseded here. It does reach the transcript when a human types
+`/compact`, because the slash command echoes hook stdout, but that echo is an
+artefact of manual invocation; an automatic compaction issues no command and so
+leaves only the debug log. Recorded because it is the obvious implementation, it
+looks correct in every unit test, and it appears to work whenever anyone tests
+it by hand. Also considered moving the notice
 to `PostCompact`, which fires after compaction completes and would have the
 right timing for the agent; rejected because its stdout has the same
 debug-log-only fate. Also considered dropping the `PreCompact` hook entirely
@@ -395,15 +409,142 @@ and reporting only at the next `SessionStart`; rejected because the user
 losing a window of work still deserves to be told at the moment it happens,
 even when the agent cannot be.
 
-Consequences: The two hooks no longer share one output contract, only the
-behavioural one — always exit 0, never write, stay silent unless something
-needs doing. That asymmetry is a trap for a future editor, so it is asserted in
-`tests/test_hook_delivery.py`, which tests what a host receives rather than
-what a notice builder returns. Both hooks now read stdin; `_hook_payload`
-refuses to read a tty so a hand-run hook cannot hang. One assumption remains
-unverified: that `SessionStart` re-fires with `source: "compact"` after an
-in-session compaction, rather than only on resuming a compacted session. The
-documented matcher list includes `compact`; the behaviour has not been observed
-here, and STATE.md records it as outstanding.
+Consequences: The two hooks now share only DEC-007's behavioural contract, not
+one output form. That asymmetry is a trap for a future editor, so it is asserted
+in `tests/test_hook_delivery.py`, which tests what a host receives rather than
+what a notice builder returns. Both hooks read stdin; `_hook_payload` refuses to
+read a tty so a hand-run hook cannot hang. The `source == "compact"`
+re-fire this design depends on is verified (see Evidence). What remains
+unobserved is the v0.5.1 wording arriving during a real compaction, because the
+installed plugin is still v0.5.0; STATE.md records that and the one cosmetic
+consequence of the envelope.
+
+Date/commit if known: 2026-08-24
+
+## DEC-010: Detect finished plans, and propose fixes as a pull request
+
+Status: Accepted in part — the CI workflow is superseded by DEC-011
+
+Decision: Add a `COMPLETED_INTENT` detector that reports plans and
+release-state claims the repository shows are already overtaken, and a
+`context-sync` CI workflow that has an agent adjudicate the `review` worklist
+and open a **pull request**. The workflow may never push to a branch anyone
+reads directly.
+
+Superseded 2026-08-24, same day, by DEC-011. The detector half ships and stands.
+The CI workflow was **built, never run, and removed** before release: it costs
+money per run, needs an API key, works only on GitHub, and reaches for a fresh
+agent while the one that made the change is still in the repository with the
+whole task in its context. Recorded rather than deleted because the reasoning
+below about *why a pull request is an admissible write* is correct and worth
+keeping — it is the argument any future automatic-write proposal must clear.
+What was wrong was the actuator, not that reasoning.
+
+Why: This tool detected staleness and could not fix it, so every update
+depended on an agent choosing to comply. It also could not see a whole class of
+staleness at all. DEC-006 detects drift by evidence movement, which requires a
+claim to cite evidence; a `Next` section cites nothing, because it describes the
+future. Nothing can move underneath it, so a finished plan sits there looking
+current forever. This repository's own STATE.md said "release the accumulated
+work (tag, marketplace update)" across three tagged releases, and said v0.5.1
+was untagged after it was tagged, while `review` reported zero defects.
+
+The PR is what makes the fixing half admissible. DEC-004 rejected mechanical
+writes because they "mark context as reviewed when nobody reviewed it, and
+silently wrong documentation is worse than visibly stale documentation". That
+still binds — and a pull request satisfies it rather than evading it, because
+review is what a PR *is*. Nothing lands unread.
+
+Evidence/context: `drift._detect_completed_intent`, `drift._project_versions`,
+`cli.cmd_review` (`--exit-code`), `tests/test_drift.py`. CONFIRMED by running
+`review` against this repository: three findings, all true, no false positives,
+on prose that had been invisible to every other detector. The workflow this
+entry describes was removed before release and is deliberately not cited — see
+the supersession note above.
+
+Alternatives considered: flagging any stale-looking intent, not only release
+intent (rejected — a release is the one plan a repository records
+unambiguously, as a tag; softer intents leave no trace and guessing at them
+makes a worklist nobody reads). Block-scoped matching rather than
+sentence-scoped and imperative-only (tried, and abandoned the same hour: two of
+every three findings were notes that merely contained the word "release", and
+the precision cost was measured here before the rule was tightened).
+Auto-committing mechanical fixes to `main` (rejected — it is DEC-004's
+mechanical `post-commit` finalize wearing a different hat). Gating the workflow
+on any finding including INFO (rejected — a negative claim can never be
+positively re-confirmed, so it is always listed, and the job would spend tokens
+on every run forever).
+
+Consequences: `review` is still not a gate, and `--exit-code` is opt-in so it
+stays that way. A latent bug surfaced while building this and is fixed here:
+version scanning trusted every `X.Y.Z` in the corpus, so documenting Repomix
+`v1.18.0` made it the newest version "any context document mentions" and
+silently disabled `VERSION_DRIFT`, a DEFECT-severity check, for this whole
+repository. Versions are now filtered to those sharing a major with an existing
+tag, which is a heuristic and will collide for a 1.x project citing a 1.x
+dependency. The workflow's proposals inherit DEC-006's blind spot exactly: an
+agent can re-stamp without re-reading, and a PR whose only diff is
+`evidence.json` is both the normal outcome and what blind attestation looks
+like. The PR body says so and asks reviewers to spot-check.
+
+Date/commit if known: 2026-08-24
+
+## DEC-011: Enforce the context ruling with a `Stop` hook, not a paid CI loop
+
+Status: Accepted
+
+Decision: Add a `Stop` hook that blocks the end of a turn — `decision: "block"`
+with a `reason` the host hands back to the agent — when a commit has landed past
+the context checkpoint and the turn has not ruled on whether project reality
+changed. The agent already in the repository does the work. The `context-sync`
+CI workflow from DEC-010 is demoted to optional.
+
+Why: DEC-010 built the actuator as a GitHub Action driving a fresh agent through
+an API key. That is the wrong shape for this tool. It costs money per run,
+requires a secret, works only on GitHub, and reaches for a second agent while
+the one that made the change is still sitting in the repository with the whole
+task in its context. The right actuator is the agent already here.
+
+`Stop` is what makes that enforceable rather than advisory. Claude Code's own
+documentation draws the line: instruction files "are context, not enforced
+configuration… to block an action regardless of what Claude decides, use a hook
+instead." `AGENTS.md` has asked every agent to state a context conclusion since
+v0.2.0, and this repository's STATE.md still went three releases stale, which is
+the measurement that settles whether instructions alone are sufficient.
+
+This is the path DEC-004 left open ("A `Stop`-based enforcement path remains
+available if instructions prove insufficient"), not a reversal of it. DEC-004's
+objection was to *asking every turn*, because the sync policy's default answer
+is "update nothing" and a hook that says "nothing needed" most of the time
+trains dismissal. The trigger here is a commit past the checkpoint — an event
+the repository records, which cannot fire mid-edit however long a task runs.
+
+Evidence/context: `cli.stop_notice`, `cli._states_context_conclusion`,
+`skill/context-maintainer/hooks/stop.sh`, `hooks/hooks.json`,
+`tests/test_hook_delivery.py`. CONFIRMED against the hooks documentation at
+https://code.claude.com/docs/en/hooks (`stop_hook_active`, `decision: "block"`,
+`last_assistant_message`) and by running `hook stop` against this repository in
+both the silent and blocking states.
+
+Alternatives considered: the DEC-010 CI loop as the primary path (superseded
+here — kept as an optional extra, because a scheduled sweep still catches the
+claims that go stale with no diff at all, which no per-turn hook can see).
+Blocking on any uncommitted edit (rejected — that is normal mid-task state and
+would fire every turn, which is DEC-004's objection restated). A `PreToolUse`
+hook denying `git commit` until context is synced (rejected — it inverts the
+order the sync policy actually wants, which is to judge a change after it
+exists, and a denied commit is a far worse failure mode than a continued turn).
+Detecting the conclusion by prose matching as the *trigger* (rejected — a closed
+vocabulary, the failure DEC-006 names; the phrase list is used only to suppress
+a block, where a miss costs one extra question and an over-match costs nothing).
+
+Consequences: One registered hook can now block, and the hooks test asserts
+exactly which three events are registered so a fourth has to be argued for. The loop guard is the host's `stop_hook_active`: the CLI goes silent
+when it is set, so a block can never repeat within a turn. The block is
+answerable in one sentence — "no context update needed" ends it — and that is
+the intended common outcome, not a failure. Codex has no `Stop` equivalent
+wired, so this is Claude Code only, the same limitation the other hooks carry.
+An agent can still satisfy the hook dishonestly by saying the words without
+looking; that is DEC-006's blind spot again, and no hook closes it.
 
 Date/commit if known: 2026-08-24

@@ -127,6 +127,7 @@ What the findings mean:
 | `VOLATILE_NUMBER` | A count ("415 tests"). Nothing edits that sentence when the number changes. |
 | `NEGATIVE_CLAIM` | An assertion that something is absent. No positive evidence can ever re-confirm it, and nothing announces itself when it stops being true. |
 | `COVERAGE_GAP` | Something real (a CI job) that the documents describe none of, while describing its siblings. |
+| `COMPLETED_INTENT` | A plan the repository shows is already carried out, or a claim that something is unreleased which a tag contradicts. Nothing else here can see these: a plan cites no evidence, so no evidence can move underneath it. |
 | `UNATTESTED` | No baseline recorded yet. Finalize once to start tracking. |
 
 Finalizing clears staleness. It never clears a defect — a dangling citation

@@ -50,7 +50,7 @@ Persistence/Integrations below). CONFIRMED by direct reading:
 | `briefing.py` | Builds the `status` report |
 | `doctor.py` | 19 deterministic health checks (`CHECKS` list), plus an optional `--verify` pass (v0.3.0) that cross-checks documented claims against evidence |
 | `verify.py` | Backs `doctor --verify`: extracts documented commands (WORKFLOWS.md) and technologies (ARCHITECTURE.md) and checks each against repo evidence (marker file, dependency entry, source usage), yielding CONFIRMED / UNVERIFIED / CONTRADICTED per claim — never fails on UNVERIFIED, only on CONTRADICTED |
-| `drift.py` | Backs `review` and `doctor --verify`'s `context_drift` check (v0.4.0). Segments each context document into claim-sized blocks, resolves the citations they carry against a repo path index, and compares each cited file to the baseline in `.context-maintainer/evidence.json`. Reports DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE, VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED. Also owns the ledger (`record_attestation`, called by `sync --finalize`) |
+| `drift.py` | Backs `review` and `doctor --verify`'s `context_drift` check (v0.4.0). Segments each context document into claim-sized blocks, resolves the citations they carry against a repo path index, and compares each cited file to the baseline in `.context-maintainer/evidence.json`. Reports DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE, VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED, COMPLETED_INTENT. Also owns the ledger (`record_attestation`, called by `sync --finalize`) |
 | `repomix.py` | Staged Repomix invocation (structure pass, full pass) and degraded-mode handling |
 | `mcp_companion.py` | Detects an optional configured `mcp-language-server` |
 | `installer.py` | Symlink install/uninstall + marketplace-plugin-install detection |
@@ -76,10 +76,23 @@ DEC-009):
   but only when the host reports `source == "compact"`, i.e. immediately after a
   compaction. That restriction is load-bearing: on any other source it would
   speak in every repository with a dirty working tree.
+- `Stop` (v0.6.0) → `hooks/stop.sh` → `hook stop`. Prints a **JSON envelope
+  carrying `decision: "block"` and a `reason`**, the only `Stop` channel that
+  reaches the agent: the host hands the reason back and the turn continues
+  rather than ending. The one registered hook that blocks. Speaks when a commit
+  has landed past the context checkpoint and the turn has not ruled on whether
+  project reality changed. Three guards, all of which must fail before it
+  speaks: the host's `stop_hook_active` (already blocked once this turn — the
+  loop guard), a `last_assistant_message` that already ruled, and nothing
+  committed past the checkpoint. Uncommitted work is deliberately not a
+  trigger. See DEC-011.
 - `PreCompact` (v0.5.0) → `hooks/pre-compact.sh` → `hook pre-compact`. Prints a
-  **JSON envelope carrying `systemMessage`**, because `PreCompact` stdout goes
-  to the host's debug log and nowhere else. `systemMessage` reaches the *user*;
-  the agent-facing half of the same report arrives at the next `SessionStart`.
+  **JSON envelope carrying `systemMessage`**, because the compaction machinery
+  injects no `PreCompact` stdout as context. A manual `/compact` does echo it,
+  as part of the slash command's own result line, but an automatic compaction
+  issues no command and so has no such line. `systemMessage` reaches the *user*
+  either way; the agent-facing half of the same report arrives at the next
+  `SessionStart`.
   Speaks when a session is about to be compacted with work it has not recorded:
   uncommitted source files, commits past the checkpoint, or claims resting on
   moved evidence. Changes under `docs/context/` and `.context-maintainer/` are
@@ -181,9 +194,14 @@ CONFIRMED: README "The context contract", `contract.py`, `.gitignore`,
   see README's note on command names, since the plugin manifest makes this a
   namespaced plugin command).
 - Codex: `$context-maintainer`.
-- Host-invoked entry points (not user-facing): `hook session-start` and
-  `hook pre-compact`, called by the `SessionStart` and `PreCompact` hooks via
-  `hooks/session-start.sh` and `hooks/pre-compact.sh`. Both always exit 0.
+- Host-invoked entry points (not user-facing): `hook session-start`,
+  `hook pre-compact` and `hook stop`, called by the `SessionStart`, `PreCompact`
+  and `Stop` hooks via the matching scripts in `hooks/`. All three always
+  exit 0.
+- There is no CI actuator, deliberately. A `context-sync` workflow driving a
+  fresh agent through an API key was built and removed before release: the
+  actuator is the `Stop` hook (DEC-011), which uses the agent already in the
+  session at no cost. See DEC-010, superseded in part.
 - CI entry points, both in `.github/workflows/ci.yml`: a `test` job running
   `pytest -q` on Python 3.9 and 3.12, and a `context-check` job (added
   v0.3.0) that runs `context-maintainer doctor --verify --strict` — the

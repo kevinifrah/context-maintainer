@@ -199,3 +199,44 @@ def test_sync_finalize_regenerates_the_index(git_repo: Path):
 
     run_cli(repo, ["sync", "--finalize"])
     assert di.is_current(path.read_text(encoding="utf-8"))
+
+
+def test_an_indexed_decisions_file_is_charged_its_read_cost(tmp_path: Path):
+    """DEC-008 as revised: bytes nobody reads are not what the budget is for.
+
+    `DECISIONS.md` is append-only by contract — a superseded decision may never
+    be deleted — so charging it total bytes guarantees a collision with any
+    fixed cap. The index exists precisely so a lookup costs the headings plus
+    one entry, and that is what gets charged.
+    """
+    from context_maintainer import decisionindex, doctor
+
+    entries = "\n".join(
+        f"## DEC-{n:03d}: Decision {n}\n\nStatus: Accepted\n\n{'padding. ' * 200}\n"
+        for n in range(1, 9)
+    )
+    path = tmp_path / "DECISIONS.md"
+    path.write_text("# Decisions\n\n" + entries, encoding="utf-8")
+    path.write_text(decisionindex.apply(path.read_text(encoding="utf-8")), encoding="utf-8")
+
+    cost = doctor._read_cost(path)
+    assert cost < path.stat().st_size, "an index that costs full price is no index"
+    # Index plus one entry, not eight.
+    assert cost < path.stat().st_size / 2
+
+
+def test_an_unindexed_document_is_charged_in_full(tmp_path: Path):
+    """The discount is the index's, not DECISIONS.md's by name."""
+    from context_maintainer import doctor
+
+    path = tmp_path / "DECISIONS.md"
+    path.write_text("# Decisions\n\n" + "prose. " * 500, encoding="utf-8")
+    assert doctor._read_cost(path) == path.stat().st_size
+
+
+def test_every_other_document_is_charged_in_full(tmp_path: Path):
+    from context_maintainer import doctor
+
+    path = tmp_path / "ARCHITECTURE.md"
+    path.write_text("# Architecture\n\n" + "prose. " * 500, encoding="utf-8")
+    assert doctor._read_cost(path) == path.stat().st_size

@@ -388,13 +388,21 @@ docs/context/ARCHITECTURE.md
       → Re-read the claim against the current file. Correct it, or re-confirm it.
 ```
 
-It reports seven kinds: `DANGLING_CITATION` (a cited file or commit does not
+It reports eight kinds: `DANGLING_CITATION` (a cited file or commit does not
 exist), `VERSION_DRIFT` (the repo is tagged newer than any document describes),
 `STALE_EVIDENCE` (the cited file moved), `VOLATILE_NUMBER` (a count that nothing
 will correct when it stops being right), `NEGATIVE_CLAIM` (an assertion of
 absence, which no positive evidence can ever re-confirm), `COVERAGE_GAP`
 (something real that the documents describe none of while describing its
-siblings), and `UNATTESTED` (no baseline recorded yet).
+siblings), `UNATTESTED` (no baseline recorded yet), and `COMPLETED_INTENT` (a
+plan the repository shows is already done).
+
+`COMPLETED_INTENT` is the odd one, and it exists because the other seven share a
+blind spot. All of them work by watching the evidence a claim cites. A plan
+cites nothing — it describes the future — so no evidence can move underneath it
+and a finished plan sits there looking current forever. This repository's own
+`Next` section said "release the accumulated work (tag, marketplace update)"
+across three tagged releases while `review` reported zero defects.
 
 The baseline lives in `.context-maintainer/evidence.json`, re-stamped by
 `sync --finalize`. It records the commit each cited file was last touched by —
@@ -499,9 +507,11 @@ docs/context/DECISIONS.md while you still remember why.
 
 That one is addressed to **you**, and it is worth knowing why. Claude Code adds
 a hook's plain output to the agent's context for only a few events —
-`SessionStart` among them, `PreCompact` not. A `PreCompact` notice printed as
-plain text is written to a debug log and read by nobody, so this one is
-delivered as a `systemMessage`, which surfaces to the user.
+`SessionStart` among them, `PreCompact` not. Typing `/compact` by hand does echo
+a `PreCompact` hook's plain output, as part of the slash command's result line,
+but that is a property of running the command; when the window fills on its own
+there is no command and no echo. So this notice is delivered as a
+`systemMessage`, which surfaces to the user however compaction was triggered.
 
 The agent hears about it one moment later. `SessionStart` fires again after a
 compaction with its source set to `compact`, and on that source — and only that
@@ -521,7 +531,36 @@ Both notices ignore changes to `docs/context/` and `.context-maintainer/` when
 deciding whether to speak, so running a `sync` does not make the next
 compaction announce itself.
 
-All three notices share three deliberate constraints:
+### Before a turn ends
+
+The other notices inform. This one **stops the turn**:
+
+```
+Context Maintainer: this repository has 13 files changed since the context
+checkpoint. Before finishing, decide whether this work changed project reality
+and state your conclusion. If it did, update only the sections of docs/context/
+that are genuinely now wrong and run `context-maintainer sync --finalize`. If it
+did not, say "no context update needed" and stop — that is the common answer and
+it ends this turn.
+```
+
+It is answerable in one sentence, and "no context update needed" is the intended
+common answer. This exists because instructions were not enough: `AGENTS.md` has
+asked every agent to state that conclusion since v0.2.0, and this repository's
+own STATE.md still went three releases stale. Claude Code's documentation draws
+the line — instruction files are "context, not enforced configuration… to block
+an action regardless of what Claude decides, use a hook instead."
+
+It fires only when a commit has landed past the context checkpoint. Uncommitted
+work is deliberately not a trigger: mid-task is the normal state, and a hook
+that fired on every edit is the nagging this design has refused twice. Three
+guards must all fail before it speaks — it never blocks twice in a turn, never
+blocks a turn that already ruled on context, and never blocks when nothing has
+been committed past the checkpoint.
+
+**No API key, no CI, no cost.** The agent already in your session does the work.
+
+All four notices share three deliberate constraints:
 
 - **Silent unless it matters.** No notice in projects that never adopted
   Context Maintainer, and none when context is already current. A hook that
@@ -530,8 +569,9 @@ All three notices share three deliberate constraints:
   in session, where you can see and correct it.
 - **Never disrupts a session.** They always exit 0 — a broken environment,
   a corrupt manifest, or a missing interpreter produces silence, not an error.
+  The `Stop` hook continues a turn; it never fails one.
 
-Both are verified on Claude Code. Codex plugin-local hooks may not execute yet
+Verified on Claude Code. Codex plugin-local hooks may not execute yet
 ([openai/codex#16430](https://github.com/openai/codex/issues/16430)).
 
 ### What it deliberately does not do

@@ -43,14 +43,18 @@ def test_hooks_json_is_valid_json_with_a_description():
     assert "hooks" in data
 
 
-def test_hooks_json_registers_no_blocking_events():
-    """`Stop` can only inform by blocking the turn, so it is deliberately absent.
+def test_hooks_json_registers_exactly_the_three_intended_events():
+    """One of these blocks, and which one is a decision, not an accident.
 
-    See DEC-004: a per-turn prompt whose own default answer is "nothing needed"
-    trains agents to dismiss it. Both registered events inform without blocking.
+    DEC-004 kept `Stop` out because it can only inform by blocking the turn, and
+    a per-turn prompt whose own default answer is "nothing needed" trains
+    agents to dismiss it. DEC-011 adds it under a narrower trigger — a commit
+    past the checkpoint, not any edit — which is the enforcement path DEC-004
+    explicitly left open. A fourth event appearing here should be argued for in
+    DECISIONS.md before it is added.
     """
     data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
-    assert set(data["hooks"]) == {"SessionStart", "PreCompact"}
+    assert set(data["hooks"]) == {"SessionStart", "PreCompact", "Stop"}
 
 
 def test_hook_command_uses_the_plugin_root_variable():

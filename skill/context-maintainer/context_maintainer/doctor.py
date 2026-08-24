@@ -359,6 +359,32 @@ def _kib(size: int) -> str:
     return f"{size / 1024:.1f} KiB"
 
 
+def _read_cost(path: Path) -> int:
+    """What a document costs to *read*, which is not always its size on disk.
+
+    For an indexed `DECISIONS.md` those diverge, and the divergence is the whole
+    point of the index (DEC-008): nobody reads the file, they read the headings
+    and jump to one entry. Charging the full byte count would make an
+    append-only document collide with a fixed cap on a fixed schedule — the
+    contract forbids deleting a superseded decision, so it only ever grows — and
+    the only ways out would be deleting reasoning or raising the budget, both of
+    which DEC-008 argued against. So an indexed document is charged for its
+    index plus its largest single entry: what a reader actually loads.
+
+    Every other document is charged its real size, because they are read whole.
+    """
+    raw = path.read_bytes()
+    if path.name != "DECISIONS.md":
+        return len(raw)
+    text = raw.decode("utf-8", errors="replace")
+    index = decisionindex.extract(text)
+    if index is None:
+        return len(raw)
+    sections = decisionindex._HEADING_LINE.split(text)
+    largest = max((len(part.encode("utf-8")) for part in sections), default=0)
+    return len(index.encode("utf-8")) + largest
+
+
 def check_context_files_not_oversized(root: Path) -> CheckResult:
     """Both budgets: per document, and — the one that matters — in total.
 
@@ -369,7 +395,7 @@ def check_context_files_not_oversized(root: Path) -> CheckResult:
     reserves the strict gate for claims the repository contradicts.
     """
     sizes = [
-        (path.name, path.stat().st_size)
+        (path.name, _read_cost(path))
         for path in contract.context_document_paths(root)
         if path.exists()
     ]

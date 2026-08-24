@@ -490,3 +490,153 @@ def test_a_defect_still_fails_even_though_the_check_is_advisory(git_repo: Path):
 
     report = doctor.run_all_checks(root, verify=True)
     assert report.failed(strict=False)
+
+
+# --- COMPLETED_INTENT: plans the repository shows are already carried out ---
+#
+# The blind spot this closes is structural, not a missed pattern. Every other
+# detector here watches a claim's cited evidence and reports when it moves. A
+# `Next` section cites nothing, because it describes the future — so nothing can
+# move underneath it, and a finished plan sits there looking current forever.
+# This repository's own STATE.md carried "release the accumulated work (tag,
+# marketplace update)" across three tagged releases and no detector saw it.
+
+
+STATE = "docs/context/STATE.md"
+
+
+def _set_state(root: Path, heading: str, body: str) -> None:
+    path = root / STATE
+    out, skipping = [], False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            skipping = line[3:].strip() == heading
+            out.append(line)
+            if skipping:
+                out.extend(["", body, ""])
+            continue
+        if skipping:
+            continue
+        out.append(line)
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def _intents(root: Path):
+    return [
+        f for f in drift.analyse(root).findings if f.kind == drift.COMPLETED_INTENT
+    ]
+
+
+def test_a_plan_to_release_an_already_tagged_version_is_flagged(git_repo: Path):
+    """The regression. Nothing cites a tag, so nothing else can see this."""
+    root = _project(git_repo)
+    _set_state(root, "Next", "Release v0.2.0, then validate on other repositories.")
+    commit_all(root, "Plan the release")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    findings = _intents(root)
+    assert findings, "a plan to release an already-tagged version went unreported"
+    assert "v0.2.0" in findings[0].detail
+
+
+def test_a_plan_to_release_an_unreleased_version_is_left_alone(git_repo: Path):
+    """The precision side: an unshipped plan is the normal, correct state."""
+    root = _project(git_repo)
+    _set_state(root, "Next", "Release v0.9.0 once the audit lands.")
+    commit_all(root, "Plan the release")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert not _intents(root)
+
+
+def test_an_imperative_release_plan_is_flagged_once_nothing_is_pending(
+    git_repo: Path,
+):
+    """"Release the accumulated work" names no version, and is still finished."""
+    root = _project(git_repo)
+    _set_state(root, "Phase", "Shipping v0.2.0.")
+    _set_state(root, "Next", "Release the accumulated work (tag, marketplace update).")
+    commit_all(root, "Plan the release")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert _intents(root)
+
+
+def test_merely_mentioning_a_release_is_not_a_plan_to_make_one(git_repo: Path):
+    """Sentence-scoped and imperative-only, or two in three findings are noise.
+
+    Both sentences below were real false positives while the rule was
+    block-scoped: each mentions a released version *and* the word release, and
+    neither is a plan to release anything.
+    """
+    root = _project(git_repo)
+    _set_state(root, "Phase", "Shipping v0.2.0.")
+    _set_state(
+        root,
+        "Next",
+        "The v0.2.0 delivery fix is verified by tests. That check needs a "
+        "release first.\n\nUntested consequence of the v0.2.0 envelope: it "
+        "should be looked at on release, not assumed.",
+    )
+    commit_all(root, "Note the open questions")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert not _intents(root), [f.to_dict() for f in _intents(root)]
+
+
+def test_a_past_tense_note_about_a_release_is_not_a_plan(git_repo: Path):
+    root = _project(git_repo)
+    _set_state(root, "Next", "Superseded: we used to release v0.2.0 monthly.")
+    commit_all(root, "Record the history")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert not _intents(root)
+
+
+def test_plans_outside_a_forward_looking_section_are_not_checked(git_repo: Path):
+    """`Blockers` is not a plan list; flagging it would nag without cause."""
+    root = _project(git_repo)
+    _set_state(root, "Blockers", "Release v0.2.0 is stuck behind CI.")
+    commit_all(root, "Record the blocker")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert not _intents(root)
+
+
+def test_another_projects_version_does_not_disable_version_checking(
+    git_repo: Path,
+):
+    """The latent bug found while building this.
+
+    Documenting Repomix `v1.18.0` made it "the newest version any context
+    document mentions", so nothing could ever be *behind* it and `VERSION_DRIFT`
+    — a DEFECT-severity check — silently stopped firing in this repository.
+    """
+    root = _project(git_repo)
+    _set_section(root, "Overview", "Shipping v0.1.0, built against Repomix v1.18.0.")
+    commit_all(root, "Describe the release")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    assert any(f.kind == drift.VERSION_DRIFT for f in drift.analyse(root).defects)
+
+
+def test_a_claim_that_a_tagged_version_is_unreleased_is_flagged(git_repo: Path):
+    """The real-world catch: STATE.md said v0.5.1 was untagged after tagging it.
+
+    Not a plan — an assertion about the present that a tag contradicts outright,
+    which is why it is checked in every section rather than only forward-looking
+    ones.
+    """
+    root = _project(git_repo)
+    _set_state(
+        root,
+        "In Progress",
+        "v0.2.0 is written and green but unreleased: no tag, and the "
+        "marketplace has not been updated.",
+    )
+    commit_all(root, "Record progress")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    findings = _intents(root)
+    assert findings, "a tag did not contradict a claim that nothing was tagged"
+    assert "unreleased" in findings[0].detail

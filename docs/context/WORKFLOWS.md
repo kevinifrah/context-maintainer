@@ -32,7 +32,7 @@ CONFIRMED: CONTRIBUTING.md "Development setup".
 pytest -q
 ```
 
-Confirmed by running it directly: **519 tests pass** as of 2026-08-24
+Confirmed by running it directly: **537 tests pass** as of 2026-08-24
 (README states "300+ automated tests", which still holds). This is the one
 place that states the figure; other documents describe the suite without
 repeating a number, so there is a single thing to update when it changes.
@@ -84,6 +84,11 @@ by each user. Two install paths, both CONFIRMED (README "Installation"):
   and/or `~/.agents/skills/context-maintainer` and installs the
   `context-maintainer` console script. Symlinks (not copies) so `git pull`
   updates both hosts at once.
+
+Keeping context current is not a CI job here. The `Stop` hook (v0.6.0, DEC-011)
+asks the agent already in the session to rule on context before its turn ends,
+which needs no secret and costs nothing. A workflow that drove a fresh agent
+through an API key was built and removed before release.
 
 CI (`.github/workflows/ci.yml`) has two jobs, both on `push` to `main` and
 every `pull_request`:

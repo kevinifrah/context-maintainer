@@ -80,6 +80,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="List documented claims whose evidence has moved, for adjudication.",
     )
     review_parser.add_argument("--json", action="store_true")
+    review_parser.add_argument(
+        "--exit-code",
+        action="store_true",
+        help=(
+            "Exit 1 when anything needs adjudicating. Opt-in, because `review` "
+            "is a worklist and not a gate (DEC-006); this exists so automation "
+            "can decide cheaply whether it has work to do."
+        ),
+    )
 
     rebuild_parser = subparsers.add_parser(
         "rebuild",
@@ -144,6 +153,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report stale or incomplete context when a project is opened.",
     )
     session_start.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    stop_hook = hook_sub.add_parser(
+        "stop",
+        help="Ask for a context ruling when committed work has outrun the docs.",
+    )
+    stop_hook.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     pre_compact = hook_sub.add_parser(
         "pre-compact",
         help="Remind the agent to record what this session learned, before "
@@ -527,6 +541,12 @@ def cmd_review(args: argparse.Namespace) -> int:
     root = _resolve_root()
     report = drift.analyse(root)
     _emit(report.to_dict(), drift.render_text(report), args.json)
+    # Deliberately not `adjudicable`: that includes INFO, and INFO findings
+    # here are standing reminders (a negative claim can never be positively
+    # re-confirmed) that never clear. Gating on them would fire this on every
+    # run forever, which is how automation gets switched off.
+    if getattr(args, "exit_code", False) and (report.defects or report.warnings):
+        return 1
     return 0
 
 
@@ -720,6 +740,87 @@ def _substantive(paths) -> int:
     )
 
 
+#: Phrases that show a turn already ruled on context. Used only to *suppress* a
+#: block, never to trigger one — the safe direction for a closed vocabulary. A
+#: phrase this misses costs one block, which the agent answers in a sentence and
+#: `stop_hook_active` then prevents repeating; a phrase it over-matches costs
+#: nothing that was not already the behaviour before this hook existed.
+_CONCLUSION_MARKERS = (
+    "docs/context", "context update", "no context change", "context conclusion",
+    "context-maintainer sync", "sync --finalize", "context is current",
+    "no update needed", "context unchanged",
+)
+
+
+def _states_context_conclusion(message: str) -> bool:
+    lowered = (message or "").lower()
+    return any(marker in lowered for marker in _CONCLUSION_MARKERS)
+
+
+def stop_notice(
+    root: Path, last_message: str = "", stop_hook_active: bool = False
+) -> Optional[str]:
+    """Why this turn should not end yet, or None to let it end.
+
+    The enforcement path DEC-004 left open. It rejected a per-turn `Stop` hook
+    because the sync policy's own default answer is "update nothing", so a hook
+    that asked every turn would say "nothing needed" most of the time and train
+    the dismissal it was built to prevent. That argument holds against *asking
+    every turn*; it does not hold against asking once, at a moment the
+    repository can point to.
+
+    The moment is a commit past the context checkpoint that touched real source.
+    Work was concluded and the documents did not move — mechanically decidable,
+    and it cannot fire mid-edit no matter how long a task runs. Uncommitted work
+    is deliberately not a trigger: that is normal mid-task state, and blocking on
+    it would nag every turn, which is DEC-004's objection restated.
+
+    Three ways to stay silent, and it takes all three failing to speak:
+    `stop_hook_active` (already blocked once this turn — never loop), a turn that
+    already ruled on context, and nothing committed past the checkpoint.
+    """
+    if stop_hook_active or _states_context_conclusion(last_message):
+        return None
+
+    try:
+        checkpoint = manifest_mod.load_manifest(
+            root / contract.MANIFEST_PATH
+        ).last_verified_commit
+    except Exception:
+        return None
+    if not checkpoint or not gitutil.commit_exists(root, checkpoint):
+        return None
+
+    changed = list(gitutil.get_changed_files_since(root, checkpoint))
+    committed = _substantive(path for _status, path in changed)
+    if not committed:
+        return None
+
+    detail = [
+        f"{committed} file{'s' if committed != 1 else ''} changed since the "
+        "context checkpoint"
+    ]
+    try:
+        report = drift.analyse(root)
+        stale = len(report.defects) + len(report.warnings)
+        if stale:
+            detail.append(
+                f"{stale} documented claim{'s' if stale != 1 else ''} now "
+                "needing adjudication"
+            )
+    except Exception:
+        pass
+
+    return _cap(
+        "Context Maintainer: this repository has " + " and ".join(detail) + ". "
+        "Before finishing, decide whether this work changed project reality and "
+        "state your conclusion. If it did, update only the sections of "
+        "docs/context/ that are genuinely now wrong and run `context-maintainer "
+        "sync --finalize`. If it did not, say \"no context update needed\" and "
+        "stop — that is the common answer and it ends this turn."
+    )
+
+
 def _unrecorded_work(root: Path) -> List[str]:
     """What this session has not written down, as phrases for a notice.
 
@@ -878,6 +979,17 @@ def cmd_hook(args: argparse.Namespace) -> int:
             )
             if notice:
                 print(notice)
+        elif args.hook_event == "stop":
+            notice = stop_notice(
+                root,
+                last_message=str(payload.get("last_assistant_message") or ""),
+                stop_hook_active=bool(payload.get("stop_hook_active")),
+            )
+            if notice:
+                # `decision: block` is the only Stop channel that reaches the
+                # agent: it hands `reason` back and the turn continues. Printing
+                # plain text here would reach the debug log alone (DEC-009).
+                print(json.dumps({"decision": "block", "reason": notice}))
         elif args.hook_event == "pre-compact":
             notice = pre_compact_notice(root)
             if notice:

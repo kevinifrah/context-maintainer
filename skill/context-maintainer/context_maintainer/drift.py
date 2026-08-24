@@ -51,6 +51,7 @@ VOLATILE_NUMBER = "VOLATILE_NUMBER"
 NEGATIVE_CLAIM = "NEGATIVE_CLAIM"
 COVERAGE_GAP = "COVERAGE_GAP"
 VERSION_DRIFT = "VERSION_DRIFT"
+COMPLETED_INTENT = "COMPLETED_INTENT"
 
 #: Grades the evidence policy asks authors to write in prose. Kept distinct from
 #: `verify.py`'s CONFIRMED/UNVERIFIED/CONTRADICTED verdicts: a grade is what the
@@ -127,6 +128,38 @@ _FENCES = ("```", "~~~")
 _COMMIT_TOKEN = re.compile(r"\b(?=[0-9a-f]{7,40}\b)(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b")
 _VERSION_TOKEN = re.compile(r"\bv?(\d+)\.(\d+)\.(\d+)\b")
 _DATE_TOKEN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+#: Headings whose content is about what has *not* happened yet. Every other
+#: detector here asks whether a claim about the present still holds; these
+#: sections make no claim about the present, which is exactly why nothing
+#: caught them until now.
+_FORWARD_SECTIONS = (
+    "next", "next steps", "upcoming", "planned", "plan", "roadmap",
+    "in progress", "todo", "to do",
+)
+
+#: Intent to cut a release. Deliberately narrow: a release is the one plan whose
+#: completion the repository records unambiguously, as a tag. Broader intents
+#: ("validate on other repos", "write the docs") leave no such trace, and
+#: guessing at them is how a worklist becomes noise nobody reads.
+_PLAN_VERB = re.compile(
+    r"\b(releas(?:e|ing)|tag(?:ging)?|ship(?:ping)?|publish(?:ing)?|cut)\b",
+    re.IGNORECASE,
+)
+
+#: Sentence split for scoping a plan verb to the version it acts on. Crude on
+#: purpose — `Optional[str]` and `v0.5.1` must not be split apart, so only a
+#: terminator followed by whitespace counts, and a decimal point never does.
+_SENTENCE = re.compile(r"(?<![0-9])[.;!?]\s+")
+
+#: Assertions that something has *not* shipped. Unlike a plan, these are claims
+#: about the present, and a tag contradicts them outright.
+_UNRELEASED_CLAIM = re.compile(
+    r"\b(unreleased|untagged|no\s+tag\b"
+    r"|not\s+(?:yet\s+)?(?:been\s+)?(?:released|tagged|shipped|published)"
+    r"|has\s+not\s+(?:been\s+)?(?:released|tagged|shipped|published))",
+    re.IGNORECASE,
+)
 
 
 def _words(text: str) -> List[str]:
@@ -803,6 +836,149 @@ def _detect_coverage_gaps(root: Path, corpus: str) -> List[Finding]:
     return findings
 
 
+def _parse_version(text: str) -> Optional[Tuple[int, int, int]]:
+    """The first `X.Y.Z` in `text`, as a comparable tuple."""
+    match = _VERSION_TOKEN.search(text)
+    if not match:
+        return None
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+
+def _project_versions(
+    corpus: str, tagged: Set[Tuple[int, int, int]]
+) -> List[Tuple[int, int, int]]:
+    """Documented versions that plausibly belong to this project.
+
+    A context document names other software's versions too, and treating those
+    as the project's own is not a small error: this repository documents Repomix
+    `v1.18.0`, which made `v1.18.0` the "newest version any context document
+    mentions" and silently disabled `VERSION_DRIFT` — a DEFECT-severity check
+    that could never fire again while that sentence stood.
+
+    A project tags its own releases, so sharing a major version with an existing
+    tag is the cheapest signal that a version token is ours. It is not
+    infallible — a 1.x project citing another 1.x tool collides — but it is
+    strictly better than trusting every number in the corpus.
+    """
+    majors = {major for major, _, _ in tagged}
+    return [
+        version
+        for version in (
+            _parse_version(m.group(0)) for m in _VERSION_TOKEN.finditer(corpus)
+        )
+        if version and version[0] in majors
+    ]
+
+
+def _detect_completed_intent(
+    blocks: Sequence[Block], corpus: str, is_repo: bool, root: Path
+) -> List[Finding]:
+    """Plans and release-state claims the repository shows are already overtaken.
+
+    The blind spot this closes is structural, not a missed pattern. Every other
+    detector here watches a claim's cited evidence and reports when it moves. A
+    `Next` section cites nothing, because it describes the future — so nothing
+    can move underneath it, and a finished plan sits there looking current
+    forever. This repository's own STATE.md carried "release the accumulated
+    work (tag, marketplace update)" across three tagged releases without a
+    single detector noticing.
+
+    Two shapes, kept apart because conflating them cost precision:
+
+    - A **plan** is an imperative — "Release v0.2.0". Requiring the verb to open
+      a sentence is what separates it from "it should be looked at on release",
+      which merely contains the word. Block-scoped matching made two of every
+      three findings that second kind.
+    - A **release-state claim** — "v0.5.1 is unreleased: no tag" — is not a plan
+      at all. It is an assertion about the present that a tag can flatly
+      contradict, which makes it the more reliable of the two.
+
+    Only release intent is checked either way. A tag is the one plan whose
+    completion a repository records unambiguously; softer intents ("validate on
+    other repos") leave no such trace, and guessing at them is how a worklist
+    becomes noise nobody reads.
+    """
+    if not is_repo:
+        return []
+    tagged = {
+        parsed
+        for parsed in (_parse_version(tag) for tag in gitutil.get_tags(root))
+        if parsed
+    }
+    if not tagged:
+        return []
+    newest_tag = max(tagged)
+    highest_documented = max(_project_versions(corpus, tagged), default=None)
+
+    findings: List[Finding] = []
+    for block in blocks:
+        if block.is_historical:
+            continue
+        sentences = _SENTENCE.split(block.text)
+        forward = block.section.strip().lower() in _FORWARD_SECTIONS
+
+        for sentence in sentences:
+            opening = sentence.lstrip("-*# ").lstrip()
+            named = [
+                v
+                for v in (_parse_version(m.group(0))
+                          for m in _VERSION_TOKEN.finditer(sentence))
+                if v
+            ]
+            released = [v for v in named if v in tagged]
+
+            # A claim that something is unreleased, contradicted by a tag.
+            if released and _UNRELEASED_CLAIM.search(sentence):
+                findings.append(
+                    _intent_finding(
+                        block,
+                        "says v{}.{}.{} is unreleased; it is tagged".format(
+                            *max(released)
+                        ),
+                    )
+                )
+                break
+
+            if not forward or not _PLAN_VERB.match(opening):
+                continue
+
+            # An imperative plan to release a version already released.
+            if released:
+                findings.append(
+                    _intent_finding(
+                        block,
+                        "plans to release v{}.{}.{}, which is already "
+                        "tagged".format(*max(released)),
+                    )
+                )
+                break
+            # An imperative plan to release, naming no version, with nothing
+            # of this project's left awaiting release.
+            if named or highest_documented is None:
+                continue
+            if highest_documented > newest_tag:
+                continue
+            findings.append(
+                _intent_finding(
+                    block,
+                    "describes releasing, but every version of this project the "
+                    "context documents mention is tagged (newest: "
+                    "v{}.{}.{})".format(*newest_tag),
+                )
+            )
+            break
+    return findings
+
+
+def _intent_finding(block: Block, detail: str) -> Finding:
+    return Finding(
+        COMPLETED_INTENT, WARN, block.source, block.section, block.excerpt(),
+        detail,
+        "Replace it with what is actually next, or move it to a past-tense "
+        "record of what shipped.",
+    )
+
+
 def _detect_version_drift(root: Path, corpus: str, is_repo: bool) -> List[Finding]:
     if not is_repo:
         return []
@@ -810,15 +986,11 @@ def _detect_version_drift(root: Path, corpus: str, is_repo: bool) -> List[Findin
     if not tags:
         return []
 
-    def parse(text: str) -> Optional[Tuple[int, int, int]]:
-        match = _VERSION_TOKEN.search(text)
-        if not match:
-            return None
-        return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
-
-    latest_tag = max((parse(t) for t in tags if parse(t)), default=None)
-    documented = [parse(m.group(0)) for m in _VERSION_TOKEN.finditer(corpus)]
-    highest_documented = max((v for v in documented if v), default=None)
+    parsed_tags = {v for v in (_parse_version(t) for t in tags) if v}
+    latest_tag = max(parsed_tags, default=None)
+    highest_documented = max(
+        _project_versions(corpus, parsed_tags), default=None
+    )
     if latest_tag is None or highest_documented is None:
         return []
     if highest_documented >= latest_tag:
@@ -907,6 +1079,11 @@ def analyse(root: Path) -> DriftReport:
 
     report.findings.extend(_detect_coverage_gaps(root, corpus))
     report.findings.extend(_detect_version_drift(root, corpus, is_repo))
+    for relative, blocks in all_blocks.items():
+        if relative.endswith("STATE.md"):
+            report.findings.extend(
+                _detect_completed_intent(blocks, corpus, is_repo, root)
+            )
     return report
 
 

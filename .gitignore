@@ -15,6 +15,3 @@ skill/context-maintainer/context_maintainer.egg-info/
 
 # Personal Claude Code settings, never shared
 .claude/settings.local.json
-
-# Temporary: SessionStart source probe (see DEC-009 open question)
-.claude/probe-session-start.sh

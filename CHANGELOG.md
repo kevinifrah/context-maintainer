@@ -3,6 +3,44 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] — unreleased
+
+### Added
+
+- `COMPLETED_INTENT` drift detection. Reports plans the repository shows are
+  already carried out ("Release the accumulated work") and claims that a version
+  is unreleased which a tag contradicts. This closes a structural blind spot,
+  not a missed pattern: every other detector watches a claim's cited evidence,
+  and a plan cites nothing because it describes the future, so nothing can move
+  underneath it. See DEC-010.
+- `context-maintainer review --exit-code`, which exits 1 when a DEFECT or WARN
+  is outstanding, so automation can decide cheaply whether it has work to do.
+  Opt-in: `review` remains a worklist and not a gate.
+- A `Stop` hook. When a commit has landed past the context checkpoint and the
+  turn has not ruled on whether project reality changed, it blocks the end of
+  the turn and hands the agent a reason. This is the enforcement layer the
+  instructions never had: `AGENTS.md` has asked for a context conclusion since
+  v0.2.0, and this repository still went three releases stale. Answerable in one
+  sentence — "no context update needed" ends it. See DEC-011.
+Not shipped, and recorded so it is not re-proposed: a `context-sync` CI workflow
+that drove a fresh agent through an `ANTHROPIC_API_KEY` to open correction pull
+requests. Built during this work and removed before release — it costs money per
+run, needs a secret, is GitHub-only, and calls in a second agent while the one
+that made the change is already in the repository. See DEC-010, superseded in
+part by DEC-011.
+
+### Fixed
+
+- Version scanning trusted every `X.Y.Z` in the context corpus, so documenting
+  another tool's version (Repomix `v1.18.0`) made it the newest version "any
+  context document mentions" and silently disabled `VERSION_DRIFT` — a
+  DEFECT-severity check — for the whole repository. Versions are now filtered to
+  those sharing a major with an existing tag.
+- The per-document size budget charges an indexed `DECISIONS.md` its read cost
+  (index plus largest entry) rather than its size on disk. An append-only
+  document collides with a fixed byte cap on a fixed schedule, and the index
+  exists precisely so nobody pays full price. Revises DEC-008.
+
 ## [0.5.1] — unreleased
 
 ### Fixed

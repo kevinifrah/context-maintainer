@@ -1,14 +1,15 @@
 """How a hook notice reaches its reader — the half the other hook tests miss.
 
-v0.5.0 shipped a `PreCompact` hook that ran, built a correct notice, printed it,
-and was read by nobody: the host writes `PreCompact` stdout to its debug log and
-shows it nowhere else. Every unit test passed, because every unit test called
-the notice *builder*.
+v0.5.0 shipped a `PreCompact` hook whose only channel to a reader was plain
+stdout, which the compaction machinery does not inject as context. A manual
+`/compact` happens to echo it in the slash command's result line; an automatic
+compaction — the case the hook exists for — does not. Every unit test passed
+either way, because every unit test called the notice *builder*.
 
 So these tests assert delivery rather than wording:
 
-- `PreCompact` must emit a JSON envelope carrying `systemMessage`, the only
-  `PreCompact` channel that reaches a human.
+- `PreCompact` must emit a JSON envelope carrying `systemMessage`, the
+  `PreCompact` channel that does not depend on how compaction was triggered.
 - `SessionStart` must emit plain text, because that is what the host adds to the
   agent's context — a JSON envelope there would be injected verbatim as prose.
 - The unrecorded-work report belongs to `source == "compact"` and to no other
@@ -210,5 +211,94 @@ def test_delivering_a_notice_writes_nothing(tmp_path: Path, event, payload):
     before = _fingerprint(repo)
 
     run_hook(repo, event, payload)
+
+    assert _fingerprint(repo) == before
+
+
+# --- Stop: blocks the turn, and only under all three guards ---------------
+
+
+def _worked(repo: Path) -> Path:
+    """A settled repository where source has been committed past the checkpoint."""
+    write(repo, "src/parser.py", "def parse():\n    return None\n")
+    commit(repo, "Add the parser")
+    return repo
+
+
+def test_stop_blocks_when_committed_work_has_outrun_the_documents(tmp_path: Path):
+    """The whole point: the turn does not end with the documents behind."""
+    repo = _worked(_settled(tmp_path))
+
+    code, out = run_hook(repo, "stop", {"stop_hook_active": False})
+
+    assert code == 0
+    assert out.strip(), "committed work outran the docs and the hook said nothing"
+    envelope = json.loads(out)
+    assert envelope["decision"] == "block"
+    assert "context" in envelope["reason"].lower()
+
+
+def test_stop_is_silent_when_it_has_already_blocked_this_turn(tmp_path: Path):
+    """`stop_hook_active` is the loop guard. Without it a block never ends."""
+    repo = _worked(_settled(tmp_path))
+
+    code, out = run_hook(repo, "stop", {"stop_hook_active": True})
+
+    assert code == 0
+    assert out == ""
+
+
+def test_stop_is_silent_when_the_turn_already_ruled_on_context(tmp_path: Path):
+    """Saying "no context update needed" is a complete answer, and ends the turn."""
+    repo = _worked(_settled(tmp_path))
+
+    for message in (
+        "Fixed the parser bug. No context update needed.",
+        "Updated docs/context/STATE.md to record the new component.",
+        "Ran context-maintainer sync --finalize after the change.",
+    ):
+        code, out = run_hook(
+            repo, "stop", {"stop_hook_active": False, "last_assistant_message": message}
+        )
+        assert code == 0, message
+        assert out == "", f"blocked a turn that already ruled: {message!r}"
+
+
+def test_stop_does_not_nag_about_work_that_is_merely_uncommitted(tmp_path: Path):
+    """Mid-task is the normal state. Blocking on it is DEC-004's objection."""
+    repo = _settled(tmp_path)
+    write(repo, "src/parser.py", "def parse():\n    return None\n")
+
+    code, out = run_hook(repo, "stop", {"stop_hook_active": False})
+
+    assert code == 0
+    assert out == "", "blocked on an uncommitted edit; this would fire every turn"
+
+
+def test_stop_is_silent_on_a_settled_repository(tmp_path: Path):
+    code, out = run_hook(_settled(tmp_path), "stop", {"stop_hook_active": False})
+
+    assert code == 0
+    assert out == ""
+
+
+def test_stop_ignores_context_only_commits(tmp_path: Path):
+    """A sync must not make the next turn demand another sync."""
+    repo = _settled(tmp_path)
+    state = repo / "docs/context/STATE.md"
+    state.write_text(state.read_text(encoding="utf-8") + "\nA note.\n", encoding="utf-8")
+    commit(repo, "Record a note")
+
+    code, out = run_hook(repo, "stop", {"stop_hook_active": False})
+
+    assert code == 0
+    assert out == ""
+
+
+def test_stop_never_writes(tmp_path: Path):
+    repo = _worked(_settled(tmp_path))
+    before = _fingerprint(repo)
+
+    run_hook(repo, "stop", {"stop_hook_active": False})
 
     assert _fingerprint(repo) == before
