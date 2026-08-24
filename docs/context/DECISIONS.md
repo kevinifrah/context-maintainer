@@ -137,3 +137,42 @@ path remains available if instructions prove insufficient.
 
 Date/commit if known: 2026-08-24, c3a5159 and 76721f8
 
+## DEC-005: `doctor --verify --strict` as a CI gate, with environmental checks kept advisory
+
+Status: Accepted
+
+Decision: Add `doctor --verify` (backed by `verify.py`) to mechanically check
+documented commands/technologies against repository evidence, and wire
+`context-maintainer doctor --verify --strict` into this repository's own CI
+as a separate `context-check` job. Within `--strict`, split checks into ones
+that fail the build (contract/content integrity, including
+`claims_verified`) and `ADVISORY_CHECKS` that never do (Repomix availability,
+MCP-companion presence, skill installation, checkpoint/state freshness).
+
+Why: Instructions alone ("keep context current") are not enforcement — they
+rely on an agent choosing to follow them. A CI gate makes a contradicted or
+drifted context document a build failure instead of a silent lie. But
+`--strict` promoting *environmental* warnings (e.g. Repomix not installed on
+a CI runner) would make it fail on every run for reasons that say nothing
+about whether the documents are correct, so `--strict` needed to distinguish
+"the context is wrong" from "the environment is limited" or it would be
+useless for the one job it exists to do.
+
+Evidence/context: `CHANGELOG.md` [0.3.0]; `docs/CI.md`; `.github/workflows/
+ci.yml` `context-check` job; `context_maintainer/doctor.py`
+(`ADVISORY_CHECKS`); `context_maintainer/verify.py`.
+
+Alternatives considered: Rely on `AGENTS.md`/`SKILL.md` instructions alone,
+with no mechanical enforcement (the v0.2.0 state — rejected because nothing
+caught drift introduced without an agent following the rule); make
+`--strict` fail on every WARN including environmental ones (rejected —
+would make the gate unusable in a plain CI runner with no Repomix/MCP
+companion installed).
+
+Consequences: A future contributor who adds a new `doctor` check must decide
+whether it belongs in `CHECKS`'s failing set or `ADVISORY_CHECKS`, and get it
+wrong at their peril — an environmental check added to the failing set would
+make CI permanently red for reasons unrelated to context correctness.
+
+Date/commit if known: 2026-08-24, 1e3c1aa (tagged v0.3.0 at b3aebed)
+

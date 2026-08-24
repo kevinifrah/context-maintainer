@@ -32,9 +32,8 @@ CONFIRMED: CONTRIBUTING.md "Development setup".
 pytest -q
 ```
 
-Confirmed by running it during this audit: **338 tests pass** (the README's
-"320 passing" badge is stale by ~18 tests as of 2026-08-24 — worth updating,
-not currently blocking). No network access, no Node, no real Repomix
+Confirmed by running it directly: **415 tests pass** as of 2026-08-24
+(README states "300+ automated tests", which still holds). No network access, no Node, no real Repomix
 required; installer tests run against a fake `$HOME` so the real
 `~/.claude`/`~/.agents` are never touched. Coverage includes the
 blank/existing detection heuristic, Git edge cases (unborn HEAD, renames,
@@ -76,10 +75,21 @@ by each user. Two install paths, both CONFIRMED (README "Installation"):
   `context-maintainer` console script. Symlinks (not copies) so `git pull`
   updates both hosts at once.
 
-CI (`.github/workflows/ci.yml`) runs `pytest -q` on `push` to `main` and on
-every `pull_request`, across Python 3.9 and 3.12 on `ubuntu-latest`. There is
-no separate release/publish workflow found — release is currently a manual
-git-tag-and-marketplace-update process (INFERRED from the absence of a
+CI (`.github/workflows/ci.yml`) has two jobs, both on `push` to `main` and
+every `pull_request`:
+
+- `test`: `pytest -q` across Python 3.9 and 3.12 on `ubuntu-latest`. Uses a
+  full checkout (`fetch-depth: 0`) because several tests reason about commit
+  history; a test that needs the recorded context checkpoint commit skips
+  itself on a shallow clone instead of failing.
+- `context-check` (added v0.3.0): `context-maintainer doctor --verify
+  --strict` on a full checkout — this repository's own context documents must
+  not contradict the repository, or the build fails. See `docs/CI.md` for
+  exactly which checks can fail the build versus which stay advisory
+  (environmental checks like Repomix/MCP-companion availability never do).
+
+There is no separate release/publish workflow found — release is currently a
+manual git-tag-and-marketplace-update process (INFERRED from the absence of a
 publish CI job and the recent marketplace-naming commit).
 
 ## Notes
@@ -87,8 +97,9 @@ publish CI job and the recent marketplace-naming commit).
 - Uninstall: `python3 installer/uninstall.py [--dry-run]` (removes only
   symlinks pointing at your checkout; anything else needs `--force` and is
   backed up first) and `pip uninstall context-maintainer`.
-- `doctor --strict` treats warnings as failures — useful for a CI gate, not
-  currently wired into `ci.yml`.
+- `doctor --strict` treats warnings as failures. Since v0.3.0 it is wired
+  into `ci.yml`'s `context-check` job, combined with `--verify` (see Deploy
+  above and `docs/CI.md`).
 - Troubleshooting for common install/symlink/command-name issues is
   documented at length in README "Troubleshooting" — check there before
   re-deriving a fix.

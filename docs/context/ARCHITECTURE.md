@@ -38,7 +38,8 @@ Persistence/Integrations below). CONFIRMED by direct reading:
 | `mdsections.py` | Markdown H2 section parser, used to validate/diff docs |
 | `scaffold.py` | Safe file creation, placeholder insertion, backups |
 | `briefing.py` | Builds the `status` report |
-| `doctor.py` | 17 deterministic health checks (`CHECKS` list) |
+| `doctor.py` | 18 deterministic health checks (`CHECKS` list), plus an optional `--verify` pass (v0.3.0) that cross-checks documented claims against evidence |
+| `verify.py` | Backs `doctor --verify`: extracts documented commands (WORKFLOWS.md) and technologies (ARCHITECTURE.md) and checks each against repo evidence (marker file, dependency entry, source usage), yielding CONFIRMED / UNVERIFIED / CONTRADICTED per claim — never fails on UNVERIFIED, only on CONTRADICTED |
 | `repomix.py` | Staged Repomix invocation (structure pass, full pass) and degraded-mode handling |
 | `mcp_companion.py` | Detects an optional configured `mcp-language-server` |
 | `installer.py` | Symlink install/uninstall + marketplace-plugin-install detection |
@@ -144,10 +145,15 @@ CONFIRMED: README "The context contract", `contract.py`, `.gitignore`.
 - Codex: `$context-maintainer`.
 - Host-invoked entry point (not user-facing): `hook session-start`, called by
   the `SessionStart` hook via `hooks/session-start.sh`. Always exits 0.
-- CI entry point: `.github/workflows/ci.yml` runs `pytest -q` on Python 3.9
-  and 3.12.
+- CI entry points, both in `.github/workflows/ci.yml`: a `test` job running
+  `pytest -q` on Python 3.9 and 3.12, and a `context-check` job (added
+  v0.3.0) that runs `context-maintainer doctor --verify --strict` — the
+  enforcement half of claim verification, so a contradicted or drifted
+  context document fails this repository's own build. See `docs/CI.md` for
+  which checks that job can fail on versus which stay advisory.
 
-CONFIRMED: pyproject.toml, README "Commands"/"Troubleshooting", CI workflow.
+CONFIRMED: pyproject.toml, README "Commands"/"Troubleshooting", CI workflow,
+`docs/CI.md`.
 
 ## Evidence Level
 
@@ -163,8 +169,8 @@ Confidence is otherwise high despite the degraded audit, because this
 project's own README and CONTRIBUTING.md are unusually thorough,
 self-describing, and specific (they document their own architecture,
 Contributing.md documents the doctor-check and contract-change conventions),
-and the test suite (338 passing, run directly via `pytest -q` during this
-audit) corroborates the documented behavior rather than merely asserting it.
+and the test suite (415 passing, run directly via `pytest -q` on 2026-08-24)
+corroborates the documented behavior rather than merely asserting it.
 Where a claim rests only on documentation without independent corroboration,
 it is marked INFERRED above; everything else cited to a specific file or
 command output is CONFIRMED.
