@@ -1,24 +1,24 @@
 {
   "attestations": {
     "docs/context/ARCHITECTURE.md": {
-      "at": "2026-08-24T05:33:44+00:00",
-      "commit": "458c3474ff0eacbba25b8a51eb3ffd20cb572c38",
+      "at": "2026-08-24T05:47:30+00:00",
+      "commit": "7cfaad7190bd7a7197f4309fb857b5c58197ac8b",
       "evidence": {
         ".agents/plugins": "92132b1",
         ".claude-plugin": "458c347",
         ".github/workflows/ci.yml": "3010ebe",
         "CONTRIBUTING.md": "13e1d67",
-        "docs/CI.md": "458c347",
-        "docs/context": "458c347",
+        "docs/CI.md": "7cfaad7",
+        "docs/context": "7cfaad7",
         "pyproject.toml": "458c347",
         "skill/context-maintainer/.codex-plugin": "458c347",
         "skill/context-maintainer/SKILL.md": "458c347",
-        "skill/context-maintainer/context_maintainer": "458c347",
+        "skill/context-maintainer/context_maintainer": "7cfaad7",
         "skill/context-maintainer/context_maintainer/briefing.py": "bef3c38",
         "skill/context-maintainer/context_maintainer/cli.py": "458c347",
         "skill/context-maintainer/context_maintainer/contract.py": "1f06fc1",
-        "skill/context-maintainer/context_maintainer/doctor.py": "458c347",
-        "skill/context-maintainer/context_maintainer/drift.py": "458c347",
+        "skill/context-maintainer/context_maintainer/doctor.py": "7cfaad7",
+        "skill/context-maintainer/context_maintainer/drift.py": "8738328",
         "skill/context-maintainer/context_maintainer/gitutil.py": "458c347",
         "skill/context-maintainer/context_maintainer/installer.py": "e148f7d",
         "skill/context-maintainer/context_maintainer/manifest.py": "1e3c1aa",
@@ -37,67 +37,67 @@
       }
     },
     "docs/context/DECISIONS.md": {
-      "at": "2026-08-24T05:33:44+00:00",
-      "commit": "458c3474ff0eacbba25b8a51eb3ffd20cb572c38",
+      "at": "2026-08-24T05:47:30+00:00",
+      "commit": "7cfaad7190bd7a7197f4309fb857b5c58197ac8b",
       "evidence": {
         ".github/workflows/ci.yml": "3010ebe",
-        "CHANGELOG.md": "458c347",
+        "CHANGELOG.md": "7cfaad7",
         "CONTRIBUTING.md": "13e1d67",
         "README.md": "458c347",
-        "docs/CI.md": "458c347",
+        "docs/CI.md": "7cfaad7",
         "skill/context-maintainer/SKILL.md": "458c347",
-        "skill/context-maintainer/context_maintainer/doctor.py": "458c347",
-        "skill/context-maintainer/context_maintainer/drift.py": "458c347",
+        "skill/context-maintainer/context_maintainer/doctor.py": "7cfaad7",
+        "skill/context-maintainer/context_maintainer/drift.py": "8738328",
         "skill/context-maintainer/context_maintainer/verify.py": "1e3c1aa",
         "skill/context-maintainer/hooks/hooks.json": "c3a5159",
         "skill/context-maintainer/references/sync-policy.md": "458c347",
-        "tests/test_drift.py": "458c347"
+        "tests/test_drift.py": "7cfaad7"
       }
     },
     "docs/context/PROJECT.md": {
-      "at": "2026-08-24T05:33:44+00:00",
-      "commit": "458c3474ff0eacbba25b8a51eb3ffd20cb572c38",
+      "at": "2026-08-24T05:47:30+00:00",
+      "commit": "7cfaad7190bd7a7197f4309fb857b5c58197ac8b",
       "evidence": {
         "CONTRIBUTING.md": "13e1d67",
         "README.md": "458c347",
-        "docs/CI.md": "458c347",
+        "docs/CI.md": "7cfaad7",
         "pyproject.toml": "458c347",
         "scripts/install.sh": "1f06fc1",
         "skill/context-maintainer/context_maintainer/contract.py": "1f06fc1",
-        "skill/context-maintainer/context_maintainer/drift.py": "458c347",
+        "skill/context-maintainer/context_maintainer/drift.py": "8738328",
         "skill/context-maintainer/references/context-contract.md": "662e7d2"
       }
     },
     "docs/context/STATE.md": {
-      "at": "2026-08-24T05:33:44+00:00",
-      "commit": "458c3474ff0eacbba25b8a51eb3ffd20cb572c38",
+      "at": "2026-08-24T05:47:30+00:00",
+      "commit": "7cfaad7190bd7a7197f4309fb857b5c58197ac8b",
       "evidence": {
         ".claude-plugin": "458c347",
-        "CHANGELOG.md": "458c347",
+        "CHANGELOG.md": "7cfaad7",
         "CONTRIBUTING.md": "13e1d67",
-        "docs/CI.md": "458c347",
+        "docs/CI.md": "7cfaad7",
         "docs/INSTALL.md": "92132b1",
         "docs/TESTING.md": "92132b1",
-        "skill/context-maintainer": "458c347",
+        "skill/context-maintainer": "7cfaad7",
         "skill/context-maintainer/.codex-plugin": "458c347",
         "skill/context-maintainer/SKILL.md": "458c347",
-        "skill/context-maintainer/context_maintainer/drift.py": "458c347",
+        "skill/context-maintainer/context_maintainer/drift.py": "8738328",
         "skill/context-maintainer/references/sync-policy.md": "458c347",
-        "tests/test_drift.py": "458c347"
+        "tests/test_drift.py": "7cfaad7"
       }
     },
     "docs/context/WORKFLOWS.md": {
-      "at": "2026-08-24T05:33:44+00:00",
-      "commit": "458c3474ff0eacbba25b8a51eb3ffd20cb572c38",
+      "at": "2026-08-24T05:47:30+00:00",
+      "commit": "7cfaad7190bd7a7197f4309fb857b5c58197ac8b",
       "evidence": {
         ".github/workflows/ci.yml": "3010ebe",
         "CONTRIBUTING.md": "13e1d67",
-        "docs/CI.md": "458c347",
+        "docs/CI.md": "7cfaad7",
         "pyproject.toml": "458c347",
-        "skill/context-maintainer": "458c347",
+        "skill/context-maintainer": "7cfaad7",
         "skill/context-maintainer/context_maintainer/contract.py": "1f06fc1",
         "skill/context-maintainer/references/context-contract.md": "662e7d2",
-        "tests/test_verify.py": "3010ebe"
+        "tests/test_verify.py": "7cfaad7"
       }
     }
   },
