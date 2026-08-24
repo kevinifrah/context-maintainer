@@ -176,3 +176,54 @@ make CI permanently red for reasons unrelated to context correctness.
 
 Date/commit if known: 2026-08-24, 1e3c1aa (tagged v0.3.0 at b3aebed)
 
+## DEC-006: Detect drift by evidence movement, not by judging prose
+
+Status: Accepted
+
+Decision: Add `drift.py` and a `context-maintainer review` command that parse
+the citations the evidence policy already requires, resolve them to real
+repository paths, and report claims whose cited evidence has moved since the
+document was last attested. Record the baseline in a separate ledger,
+`.context-maintainer/evidence.json`, keyed **per citation** — the commit each
+cited file was last touched by — re-stamped by `sync --finalize`. Surface the
+worklist to the agent through `review`, `sync --json`, the session-start hook,
+and an explicit adjudication step in `SKILL.md` and `references/sync-policy.md`.
+
+Why: Whether a sentence is true is not mechanically decidable, so v0.3.0's
+`doctor --verify` could only check a closed vocabulary of commands and
+technologies. That left the drift that actually happens untouched: this
+repository shipped a stale test count, a phase that had moved on, and a CI job
+described nowhere, all while `doctor --verify --strict` stayed green. Whether a
+claim's *evidence has moved* is decidable, and because the documents already
+cite their sources, the audit trail needed to compute it already exists. That
+converts an undecidable question into a decidable one and — the point — yields a
+bounded, localized worklist naming specific sentences, rather than "re-read five
+documents", which is advice nobody follows.
+
+Evidence/context: `CHANGELOG.md` [0.4.0]; `context_maintainer/drift.py`;
+`doctor.check_context_drift`; `tests/test_drift.py`; the drift found during the
+2026-08-24 sync that `--verify --strict` did not catch.
+
+Alternatives considered: Extend `verify.py`'s fingerprint tables (rejected —
+it can only ever judge claims whose vocabulary it already knows, and cannot see
+an omission at all, because an omission leaves no claim to check); per-claim
+content hashes instead of per-document attestation (rejected — any rewording
+loses the attestation and the state grows without bound); compute staleness
+against the sync checkpoint rather than per citation (rejected — it would flag
+every claim on every commit, and a signal that fires constantly is a signal that
+gets switched off); fail CI on the whole worklist (rejected for DEC-005's
+reason — moved evidence means *unverified*, not wrong, and turning every
+code-touching pull request red would destroy the gate's credibility).
+
+Consequences: Attestation is per document, so an agent *can* re-stamp without
+genuinely re-reading each claim; the mechanics localize and demand, but cannot
+enforce honesty, and this is the same boundary the rest of the tool sits on.
+Mitigated in one respect that matters: finalizing clears staleness and never
+clears a defect, so a dangling citation still fails `doctor` after a re-stamp
+and cannot be laundered. Claims that cite nothing opt out of drift detection
+entirely, which is why the evidence policy now asks for citations that can be
+re-checked. `DECISIONS.md` is exempt from current-state detectors, since its
+entries describe the moment a decision was taken.
+
+Date/commit if known: 2026-08-24, v0.4.0
+

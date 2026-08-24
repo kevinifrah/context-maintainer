@@ -10,7 +10,7 @@
       "source": "./skill/context-maintainer",
       "displayName": "Context Maintainer",
       "description": "Create and maintain durable project context in the repository itself so any coding agent can quickly understand a project.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "license": "MIT",
       "keywords": [
         "context",

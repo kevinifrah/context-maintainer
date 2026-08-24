@@ -57,3 +57,13 @@ When one applies, run the Context Maintainer sync workflow
 (`context-maintainer sync`, or the `context-maintainer` skill) and update only
 the sections that are genuinely now wrong. Read a section before concluding it
 is unaffected.
+
+## Claims that go stale without any change
+
+The table above is driven by what you changed. Some claims stop being true
+without anyone touching them: a test count, a version, a note that something
+does not exist yet. Nothing in a diff points at those.
+
+Run `context-maintainer review` and rule on what it lists — correct the claim,
+or read the cited file and satisfy yourself it still holds. Re-confirming a
+claim you did not actually check is the one failure this cannot detect.

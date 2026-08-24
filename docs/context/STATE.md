@@ -8,35 +8,50 @@ decisions live in DECISIONS.md.
 
 ## Phase
 
-v0.3.0 released and published; awaiting real-world validation. CONFIRMED:
-`git tag` shows v0.1.0, v0.2.0, and v0.3.0 (tagged at `b3aebed`), all with
-CHANGELOG entries.
+v0.4.0 in the working tree, not yet tagged: drift detection and the `review`
+worklist are implemented, tested, and dogfooded on this repository. v0.3.0 is
+the newest released tag. CONFIRMED: `git tag`, `CHANGELOG.md` [0.4.0].
 
 ## Objective
 
-Closing the loop between "context exists" and "context stays true". v0.2.0
-added the `SessionStart` hook (automatic staleness detection across sessions)
-and made the per-turn update decision explicit and reportable in `AGENTS.md`
-and `SKILL.md`. v0.3.0 went further: `doctor --verify` mechanically checks
-documented claims against repository evidence, `manifest.json` tracks
-`state_confirmed_at` so STATE.md itself can go stale on a timer (21 days) even
-with no code changes, and a `context-check` CI job now fails this repository's
-own build on a contradicted claim. CONFIRMED by CHANGELOG [0.3.0], commit
-1e3c1aa, `docs/CI.md`, and commits c3a5159/76721f8/0a1e7e2 for the v0.2.0 half.
+Making the context maintain itself. v0.2.0 added the `SessionStart` hook and
+made the per-turn update decision explicit. v0.3.0 made claims *checkable*:
+`doctor --verify`, time-based STATE staleness, and a `context-check` CI job
+that fails the build on a contradicted claim.
+
+v0.4.0 closes the gap those left. Checkable was not enough — this repository
+drifted anyway (a stale test count, a phase that had moved on, a CI job
+described nowhere) while `doctor --verify --strict` stayed green, because
+contradiction-checking only judges claims that exist, in a vocabulary it
+already knows. So v0.4.0 detects drift by *evidence movement* instead of by
+judging prose: `review` parses the citations the documents already carry,
+resolves them, and reports the claims whose evidence has moved since anyone
+confirmed them. The agent is now told to adjudicate that list, in `SKILL.md`,
+`references/sync-policy.md`, and `AGENTS.md`.
+
+CONFIRMED by CHANGELOG [0.4.0], `drift.py`, `tests/test_drift.py`, DEC-006,
+and by running `review` against this repository.
 
 ## Implemented
 
-CONFIRMED by direct reading and by running the test suite (415 tests
-passing, `pytest -q`, 2026-08-24):
+CONFIRMED by direct reading and by running the test suite (`pytest -q`,
+2026-08-24; the count is in WORKFLOWS.md "Testing"):
 
-- Full CLI: `init`, `status`, `sync`, `doctor`, `rebuild`, `audit`, `skill`
-  (status/install/uninstall), all with `--json` output.
+- Full CLI: `init`, `status`, `sync`, `review`, `doctor`, `rebuild`, `audit`,
+  `skill` (status/install/uninstall), all with `--json` output.
 - The context contract (`AGENTS.md`, `CLAUDE.md`,
   `docs/context/{PROJECT,ARCHITECTURE,WORKFLOWS,STATE,DECISIONS}.md`,
-  `.context-maintainer/manifest.json`) plus 18 deterministic `doctor` checks,
+  `.context-maintainer/manifest.json`) plus the deterministic `doctor` checks,
   plus (v0.3.0) an optional `doctor --verify` pass that checks documented
   commands/technologies against repository evidence
   (CONFIRMED/UNVERIFIED/CONTRADICTED).
+- Narrative drift detection (v0.4.0): `drift.py` and `context-maintainer
+  review` parse the citations in each context document, resolve them against a
+  repository path index, and compare them to the per-citation baseline in
+  `.context-maintainer/evidence.json`, re-stamped by `sync --finalize`.
+  Reported as DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE,
+  VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED. `doctor --verify`
+  fails on the unambiguous kinds only; the rest is worklist, not gate.
 - Time-based STATE staleness (v0.3.0): `manifest.json` records
   `state_confirmed_at`; after 21 days `doctor` and the session hook ask for
   re-confirmation even if nothing else changed.
@@ -59,8 +74,8 @@ passing, `pytest -q`, 2026-08-24):
 
 ## In Progress
 
-None — working tree is clean at `HEAD` (`3010ebe`, "Fix a test that depended
-on checkout depth"). CONFIRMED: `git status`, 2026-08-24.
+v0.4.0 is written and green but not yet released: no tag, and the marketplace
+has not been updated. CONFIRMED: `git tag` shows v0.3.0 as newest.
 
 ## Blockers
 
@@ -68,21 +83,29 @@ None. CONFIRMED (user, 2026-08-24).
 
 ## Next
 
-Validate that generated context is *accurate*, not merely well-structured or
-mechanically claim-checked — still the main unproven claim. CONFIRMED
-(user, 2026-08-24): this remains the priority even after v0.3.0.
+Release v0.4.0 (tag, marketplace update), then validate that generated context
+is *accurate* on projects other than this one — still the main unproven claim,
+and still the priority. CONFIRMED (user, 2026-08-24).
 
-`doctor --verify` (v0.3.0) only mechanically checks documented *commands* and
-*technologies* against evidence — it does not catch narrative drift (a stale
-test count, a phase/tag that has moved on, a CI job added but never
-described). This sync session (2026-08-24) found exactly that kind of drift
-across PROJECT/ARCHITECTURE/WORKFLOWS/STATE — none of it caught by
-`doctor --verify --strict`, all of it predating this sync's own checkpoint —
-which is itself evidence for why the *judgment* layer (an agent actually
-reading sections, not just running `doctor`) still matters and is the thing
-to keep validating.
+v0.4.0 changed what "validate accuracy" now means. Accuracy has two failure
+modes and they need different evidence:
+
+- **Does the tooling catch drift it should?** Partly answered here.
+  Development of v0.4.0 was itself the first test: `review` found the stale
+  "415 tests" claim in three places and a stale "17 doctor checks" that its own
+  first regex missed, and the repository's dogfooding test caught a citation
+  bug (newly added files are invisible to `git ls-files`) before it shipped.
+  That is real evidence, but it is evidence from one repository that happens to
+  be the tool's own.
+- **Does an agent actually adjudicate the worklist honestly?** Unanswered, and
+  not mechanically answerable. Attestation is per document, so re-stamping
+  without re-reading is possible and undetectable — see DEC-006's Consequences.
+  This is the thing real-world use has to show.
 
 Specifically outstanding:
+- Drift detection has only ever run against this repository. Its false-positive
+  rate on unfamiliar prose is unmeasured, and the first draft produced 125 false
+  defects here before calibration — so the risk is real, not theoretical.
 - A cold install by someone with no local checkout has never been exercised;
   every install so far happened on the machine holding the repository.
 - Codex plugin-local hooks may not execute yet (openai/codex#16430), so the

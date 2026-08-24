@@ -1,0 +1,388 @@
+"""Narrative drift detection.
+
+The design constraint that shapes every test here: this checker reports on
+prose that is probably fine. A finding it cannot justify costs more than a
+claim it misses, because a worklist full of noise is a worklist nobody works.
+
+Two properties matter most and are tested first:
+
+1. It stays silent when an unrelated file changes. Per-citation baselines are
+   the whole reason this is usable — "something changed since the checkpoint"
+   would flag every claim on every commit.
+2. It speaks up, per claim, when the specific file a claim cites moves.
+"""
+import json
+from pathlib import Path
+
+import pytest
+
+from context_maintainer import drift, gitutil
+from conftest import commit_all, write
+from fixtures import cli_json, run_cli
+
+ARCHITECTURE = "docs/context/ARCHITECTURE.md"
+
+
+def _attest(root: Path) -> None:
+    drift.record_attestation(root, gitutil.get_head_commit(root), "2026-08-24T00:00:00+00:00")
+
+
+def _project(root: Path) -> Path:
+    """A repository whose ARCHITECTURE.md cites a real source file."""
+    write(root, "pyproject.toml", "[project]\nname = 'demo'\n")
+    write(root, "src/auth.py", "def login():\n    return True\n")
+    run_cli(root, ["init"])
+    _set_section(root, "Overview", "Authenticates users. CONFIRMED: `src/auth.py` handles login.")
+    commit_all(root, "Initial project")
+    return root
+
+
+def _set_section(root: Path, heading: str, body: str) -> None:
+    path = root / ARCHITECTURE
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    out, skipping = [], False
+    for line in lines:
+        if line.startswith("## "):
+            skipping = line[3:].strip() == heading
+            out.append(line)
+            if skipping:
+                out.extend(["", body, ""])
+            continue
+        if skipping:
+            continue
+        out.append(line)
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+# --- the noise-control property -------------------------------------------
+
+
+def test_unrelated_file_changing_produces_no_finding(git_repo: Path):
+    """Per-citation baselines, not checkpoint lag.
+
+    If this ever fails, the checker has become "anything changed" and will be
+    ignored within a week.
+    """
+    root = _project(git_repo)
+    _attest(root)
+    write(root, "CHANGELOG.md", "# Changelog\n")
+    commit_all(root, "Unrelated change")
+
+    stale = [f for f in drift.analyse(root).findings if f.kind == drift.STALE_EVIDENCE]
+    assert not stale, [f.to_dict() for f in stale]
+
+
+def test_cited_file_changing_reports_the_claim_that_rests_on_it(git_repo: Path):
+    root = _project(git_repo)
+    _attest(root)
+    write(root, "src/auth.py", "def login():\n    return False\n")
+    commit_all(root, "Change auth behaviour")
+
+    stale = [f for f in drift.analyse(root).findings if f.kind == drift.STALE_EVIDENCE]
+    assert len(stale) == 1
+    assert stale[0].section == "Overview"
+    assert "src/auth.py" in stale[0].detail
+    assert stale[0].severity == drift.WARN
+
+
+def test_each_section_citing_the_same_file_is_reported_separately(git_repo: Path):
+    """Three sentences resting on one file are three sentences to re-read."""
+    root = _project(git_repo)
+    _set_section(root, "Components", "Login lives in `src/auth.py`.")
+    _set_section(root, "Data Flow", "Requests reach `src/auth.py`.")
+    commit_all(root, "Describe auth in more sections")
+    _attest(root)
+    write(root, "src/auth.py", "def login():\n    return False\n")
+    commit_all(root, "Change auth")
+
+    sections = {
+        f.section
+        for f in drift.analyse(root).findings
+        if f.kind == drift.STALE_EVIDENCE
+    }
+    assert sections == {"Overview", "Components", "Data Flow"}
+
+
+def test_editing_context_documents_does_not_make_them_look_stale(git_repo: Path):
+    """A sync must not report itself as drift the moment it finishes."""
+    root = _project(git_repo)
+    _attest(root)
+    _set_section(root, "Persistence", "Flat files. CONFIRMED by direct reading.")
+    commit_all(root, "Update context")
+
+    stale = [f for f in drift.analyse(root).findings if f.kind == drift.STALE_EVIDENCE]
+    assert not stale, [f.to_dict() for f in stale]
+
+
+# --- citations that point nowhere -----------------------------------------
+
+
+def test_citation_to_a_missing_file_is_a_defect(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Components", "Sessions live in `src/sessions.py`.")
+    commit_all(root, "Cite a file that does not exist")
+
+    defects = drift.analyse(root).defects
+    assert any("src/sessions.py" in f.detail for f in defects), [
+        f.to_dict() for f in defects
+    ]
+
+
+def test_citation_to_a_nested_file_by_bare_name_resolves(git_repo: Path):
+    """Documents cite `auth.py` once the directory is established in prose.
+
+    Resolving citations against the repository root instead would call every
+    such reference broken — which is what a first draft of this did, on more
+    than a hundred correct lines.
+    """
+    root = _project(git_repo)
+    _set_section(root, "Components", "Login is implemented in `auth.py`.")
+    commit_all(root, "Cite by bare filename")
+
+    assert not drift.analyse(root).defects
+
+
+def test_prose_containing_a_slash_is_not_read_as_a_path(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Components", "The parser handles validate/diff and read/write modes.")
+    commit_all(root, "Prose with slashes")
+
+    assert not drift.analyse(root).defects
+
+
+@pytest.mark.parametrize("phrase", ["`templates/`", "`@AGENTS.md`"])
+def test_directory_and_import_citations_resolve(git_repo: Path, phrase: str):
+    root = _project(git_repo)
+    write(root, "templates/base.html", "<html></html>\n")
+    _set_section(root, "Components", f"See {phrase} for details.")
+    commit_all(root, "Cite a directory and an import")
+
+    assert not drift.analyse(root).defects
+
+
+def test_citation_to_a_commit_outside_history_is_a_defect(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Overview", "Rewritten in commit deadbe1 — CONFIRMED.")
+    commit_all(root, "Cite an unknown commit")
+
+    defects = drift.analyse(root).defects
+    assert any("deadbe1" in f.detail for f in defects), [f.to_dict() for f in defects]
+
+
+# --- claims that rot silently ---------------------------------------------
+
+
+def test_a_counted_quantity_is_flagged_for_recounting(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Overview", "The suite has 415 tests. CONFIRMED by running it.")
+    commit_all(root, "State a test count")
+
+    volatile = [
+        f for f in drift.analyse(root).findings if f.kind == drift.VOLATILE_NUMBER
+    ]
+    assert volatile and "415 tests" in volatile[0].detail
+
+
+def test_a_version_number_is_not_treated_as_a_count(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Overview", "Released as v1.2.3 with 0 known issues.")
+    commit_all(root, "State a version")
+
+    volatile = [
+        f for f in drift.analyse(root).findings if f.kind == drift.VOLATILE_NUMBER
+    ]
+    assert not volatile, [f.to_dict() for f in volatile]
+
+
+def test_a_claim_of_absence_is_flagged_for_rechecking(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Integrations", "There is no message queue in this system.")
+    commit_all(root, "Assert an absence")
+
+    negatives = [
+        f for f in drift.analyse(root).findings if f.kind == drift.NEGATIVE_CLAIM
+    ]
+    assert negatives
+
+
+def test_a_migration_note_is_not_treated_as_a_current_claim(git_repo: Path):
+    """The same historical exemption `verify.py` needs, for the same reason."""
+    root = _project(git_repo)
+    _attest(root)
+    _set_section(
+        root, "Persistence", "We migrated away from `src/auth.py` storage. No longer used."
+    )
+    write(root, "src/auth.py", "def login():\n    return False\n")
+    commit_all(root, "Record a migration")
+
+    stale = [
+        f
+        for f in drift.analyse(root).findings
+        if f.kind == drift.STALE_EVIDENCE and f.section == "Persistence"
+    ]
+    assert not stale, [f.to_dict() for f in stale]
+
+
+def test_decisions_are_exempt_from_current_state_checks(git_repo: Path):
+    """DECISIONS.md records what was true when a decision was taken."""
+    root = _project(git_repo)
+    path = root / "docs/context/DECISIONS.md"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + "\n## DEC-009: Kept the runner\n\nWhy: there is no faster option, and "
+        "the suite had 42 tests at the time.\n",
+        encoding="utf-8",
+    )
+    commit_all(root, "Record a decision")
+
+    kinds = {
+        f.kind
+        for f in drift.analyse(root).findings
+        if f.source.endswith("DECISIONS.md")
+    }
+    assert drift.VOLATILE_NUMBER not in kinds
+    assert drift.NEGATIVE_CLAIM not in kinds
+
+
+# --- omissions verification cannot see ------------------------------------
+
+
+def test_an_undocumented_ci_job_is_reported_when_its_siblings_are_documented(
+    git_repo: Path,
+):
+    root = _project(git_repo)
+    write(
+        root,
+        ".github/workflows/ci.yml",
+        "name: CI\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "  publish:\n    runs-on: ubuntu-latest\n",
+    )
+    _set_section(root, "Overview", "CI runs the test job on every push.")
+    commit_all(root, "Add a second CI job")
+
+    gaps = [f for f in drift.analyse(root).findings if f.kind == drift.COVERAGE_GAP]
+    assert gaps and "publish" in gaps[0].detail
+
+
+def test_a_project_documenting_no_ci_jobs_is_left_alone(git_repo: Path):
+    """Choosing not to enumerate is a choice, not an omission."""
+    root = _project(git_repo)
+    write(
+        root,
+        ".github/workflows/ci.yml",
+        "name: CI\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n",
+    )
+    commit_all(root, "Add CI")
+
+    gaps = [f for f in drift.analyse(root).findings if f.kind == drift.COVERAGE_GAP]
+    assert not gaps
+
+
+def test_a_release_newer_than_any_document_is_a_defect(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Overview", "Shipping v0.1.0 now.")
+    commit_all(root, "Describe the release")
+    gitutil._run(root, "tag", "v0.2.0")
+
+    defects = drift.analyse(root).defects
+    assert any(f.kind == drift.VERSION_DRIFT for f in defects), [
+        f.to_dict() for f in defects
+    ]
+
+
+# --- the ledger -----------------------------------------------------------
+
+
+def test_attestation_records_the_commit_each_cited_file_was_last_touched_by(
+    git_repo: Path,
+):
+    root = _project(git_repo)
+    _attest(root)
+    ledger = drift.load_ledger(root)
+    evidence = ledger["attestations"][ARCHITECTURE]["evidence"]
+    assert evidence["src/auth.py"] == gitutil.get_last_commit_touching(root, "src/auth.py")
+
+
+def test_a_corrupt_ledger_degrades_instead_of_raising(git_repo: Path):
+    root = _project(git_repo)
+    (root / drift.EVIDENCE_PATH).write_text("{not json", encoding="utf-8")
+    report = drift.analyse(root)
+    assert not report.ledger_present
+    assert any(f.kind == drift.UNATTESTED for f in report.findings)
+
+
+def test_attesting_does_not_clear_a_real_defect(git_repo: Path):
+    """Re-stamping must never launder a broken citation into a clean report."""
+    root = _project(git_repo)
+    _set_section(root, "Components", "Sessions live in `src/sessions.py`.")
+    commit_all(root, "Cite a missing file")
+    _attest(root)
+
+    assert drift.analyse(root).defects
+
+
+# --- integration with the CLI and doctor ----------------------------------
+
+
+def test_review_reports_findings_as_json(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Components", "Sessions live in `src/sessions.py`.")
+    commit_all(root, "Cite a missing file")
+
+    code, payload = cli_json(root, ["review"])
+    assert code == 0
+    assert payload["counts"][drift.DEFECT] >= 1
+    assert any(f["kind"] == drift.DANGLING_CITATION for f in payload["findings"])
+
+
+def test_sync_finalize_writes_the_evidence_baseline(git_repo: Path):
+    root = _project(git_repo)
+    code, payload = cli_json(root, ["sync", "--finalize", "--note", "initial baseline"])
+    assert code == 0
+    ledger = json.loads((root / drift.EVIDENCE_PATH).read_text(encoding="utf-8"))
+    assert ledger["attestations"][ARCHITECTURE]["evidence"]["src/auth.py"]
+
+
+def test_sync_reports_how_many_claims_need_adjudication(git_repo: Path):
+    root = _project(git_repo)
+    _set_section(root, "Components", "Sessions live in `src/sessions.py`.")
+    commit_all(root, "Cite a missing file")
+
+    code, payload = cli_json(root, ["sync"])
+    assert code == 0
+    assert payload["claims_to_adjudicate"][drift.DEFECT] >= 1
+
+
+def test_doctor_verify_fails_on_a_dangling_citation(git_repo: Path):
+    from context_maintainer import doctor
+
+    root = _project(git_repo)
+    _set_section(root, "Components", "Sessions live in `src/sessions.py`.")
+    commit_all(root, "Cite a missing file")
+
+    report = doctor.run_all_checks(root, verify=True)
+    result = next(r for r in report.results if r.name == "context_drift")
+    assert result.status == doctor.FAIL
+    assert report.failed(strict=False), "a broken citation is unambiguous enough to fail"
+
+
+def test_doctor_verify_warns_but_does_not_fail_on_moved_evidence(git_repo: Path):
+    """Moved evidence means unverified, not wrong — it asks rather than blocks."""
+    from context_maintainer import doctor
+
+    root = _project(git_repo)
+    _attest(root)
+    write(root, "src/auth.py", "def login():\n    return False\n")
+    commit_all(root, "Change auth")
+
+    report = doctor.run_all_checks(root, verify=True)
+    result = next(r for r in report.results if r.name == "context_drift")
+    assert result.status == doctor.WARN
+    assert not report.failed(strict=False)
+
+
+def test_context_drift_is_not_advisory_so_strict_enforces_it(git_repo: Path):
+    from context_maintainer import doctor
+
+    assert "context_drift" not in doctor.ADVISORY_CHECKS

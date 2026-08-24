@@ -34,6 +34,7 @@ them would make `--strict` useless for the one job it exists to do.
 | `no_duplication` | `AGENTS.md` has become a knowledge dump |
 | `context_size` | A document has grown far beyond a briefing |
 | `claims_verified` | **A documented claim is contradicted by the repository** |
+| `context_drift` | **A claim cites a file or commit that does not exist, or the repository is tagged newer than any context document describes** |
 | `plugin_manifests` | Only relevant when developing the tool itself |
 
 **Never fails the build** (`ADVISORY_CHECKS`):
@@ -45,6 +46,19 @@ them would make `--strict` useless for the one job it exists to do.
 | `skill_installation` | CI has no agent host installed |
 | `checkpoint_freshness` | A pull request is legitimately ahead of the last sync |
 | `state_freshness` | Punishing an unrelated PR because nobody confirmed STATE recently is the wrong lever |
+
+### What `context_drift` deliberately does *not* fail on
+
+`context-maintainer review` reports more than `context_drift` enforces. Claims
+whose evidence merely *moved*, counts worth re-checking, and assertions of
+absence are all judgment work: usually the claim is still true and only a person
+or an agent can say so. Failing a build on them would turn every pull request
+that touched code red for reasons unrelated to whether the documents are wrong —
+the same mistake `--strict` avoids by keeping environmental warnings advisory.
+
+So the split is: `doctor` fails on what is unambiguously broken, `review` asks
+about what needs a ruling. If you want the stricter behaviour in CI, run
+`context-maintainer review --json` and gate on the counts yourself.
 
 ## GitHub Actions
 

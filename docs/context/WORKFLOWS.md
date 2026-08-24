@@ -32,17 +32,27 @@ CONFIRMED: CONTRIBUTING.md "Development setup".
 pytest -q
 ```
 
-Confirmed by running it directly: **415 tests pass** as of 2026-08-24
-(README states "300+ automated tests", which still holds). No network access, no Node, no real Repomix
-required; installer tests run against a fake `$HOME` so the real
-`~/.claude`/`~/.agents` are never touched. Coverage includes the
-blank/existing detection heuristic, Git edge cases (unborn HEAD, renames,
-deletions), manifest validation, all 17 `doctor` checks, the Repomix wrapper
-including its degraded path, installer conflict handling, skill/plugin
-packaging, and end-to-end lifecycles against two fixtures (one deliberately
-containing stale docs that contradict the code, to exercise "prefer the
-source" behavior). CONFIRMED: README "Testing", CONTRIBUTING.md "Testing
-conventions", direct test run.
+Confirmed by running it directly: **442 tests pass** as of 2026-08-24
+(README states "300+ automated tests", which still holds). This is the one
+place that states the figure; other documents describe the suite without
+repeating a number, so there is a single thing to update when it changes.
+
+No network access, no Node, no real Repomix required; installer tests run
+against a fake `$HOME` so the real `~/.claude`/`~/.agents` are never touched.
+Coverage includes the blank/existing detection heuristic, Git edge cases
+(unborn HEAD, renames, deletions), manifest validation, every `doctor` check,
+claim verification and drift detection, the Repomix wrapper including its
+degraded path, installer conflict handling, skill/plugin packaging, and
+end-to-end lifecycles against two fixtures (one deliberately containing stale
+docs that contradict the code, to exercise "prefer the source" behavior).
+CONFIRMED: README "Testing", CONTRIBUTING.md "Testing conventions", direct
+test run.
+
+Two tests run this repository's context against its own checkers
+(`tests/test_verify.py`): one asserts no contradicted claims, the other runs
+the exact CI gate. They fail locally, not just in CI, when a change leaves the
+context wrong — which is how the drift-detection work in v0.4.0 was itself
+caught mid-development.
 
 CI runs the same command across a matrix — see Build below.
 

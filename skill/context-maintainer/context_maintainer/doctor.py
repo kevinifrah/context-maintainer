@@ -678,6 +678,59 @@ def check_claims_against_evidence(root: Path, strict: bool = False) -> CheckResu
     return CheckResult("claims_verified", PASS, f"Claims consistent with the repository — {summary}.")
 
 
+def check_context_drift(root: Path) -> CheckResult:
+    """Have documented claims outlived the evidence they were written from?
+
+    `check_claims_against_evidence` asks whether a claim is contradicted.
+    This asks the question that actually catches rot: whether anyone has
+    re-confirmed the claim since the file it cites moved. A stale test count or
+    a "there is no release workflow" note written before someone added one is
+    invisible to contradiction-checking, because nothing in the repository
+    disagrees out loud.
+
+    Only unambiguous defects and moved evidence affect the build. The rest of
+    the drift worklist — counts worth re-checking, claims of absence — is
+    judgment work, surfaced by `context-maintainer review` rather than used to
+    turn CI red on a pull request that merely touched code.
+    """
+    from . import drift as drift_mod
+
+    report = drift_mod.analyse(root)
+    defects = report.defects
+    stale = [f for f in report.findings if f.kind == drift_mod.STALE_EVIDENCE]
+
+    if defects:
+        details = "; ".join(f"{f.source}: {f.detail}" for f in defects[:3])
+        return CheckResult(
+            "context_drift",
+            FAIL,
+            f"{len(defects)} context citation(s) point at something that does "
+            f"not exist — {details}",
+            "Run `context-maintainer review` for the full list, then correct "
+            "each citation.",
+        )
+    if stale:
+        details = "; ".join(f"{f.source}: {f.detail}" for f in stale[:3])
+        return CheckResult(
+            "context_drift",
+            WARN,
+            f"{len(stale)} claim(s) rest on evidence that has changed since "
+            f"they were last confirmed — {details}",
+            "Run `context-maintainer review`, re-read each claim against the "
+            "current file, then `context-maintainer sync --finalize`.",
+        )
+    if not report.ledger_present:
+        return CheckResult(
+            "context_drift",
+            PASS,
+            "No evidence baseline recorded yet — run "
+            "`context-maintainer sync --finalize` to start tracking drift.",
+        )
+    return CheckResult(
+        "context_drift", PASS, "No claim has outlived the evidence it cites."
+    )
+
+
 #: Ordered so the most fundamental failures are reported first.
 CHECKS: List[Callable[[Path], CheckResult]] = [
     check_manifest_exists_and_parses,
@@ -712,6 +765,7 @@ def run_all_checks(root: Path, verify: bool = False) -> DoctorReport:
     results = [check(root) for check in CHECKS]
     if verify:
         results.append(check_claims_against_evidence(root))
+        results.append(check_context_drift(root))
     return DoctorReport(results=results)
 
 

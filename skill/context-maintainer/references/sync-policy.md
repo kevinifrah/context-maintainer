@@ -11,10 +11,31 @@ commit rewrites them, nobody can tell what actually changed.
 2. Classify the changes (below).
 3. For each document you believe is affected, **read the relevant section
    first**. Never rewrite from memory.
-4. Edit only sections that are genuinely now wrong.
-5. `context-maintainer sync --finalize`, then `context-maintainer doctor`.
+4. `context-maintainer review --json`, and rule on every claim it lists.
+5. Edit only sections that are genuinely now wrong.
+6. `context-maintainer sync --finalize`, then `context-maintainer doctor
+   --verify`.
 
 Finalize even when nothing changed — that is what keeps the next `sync` cheap.
+
+## Change-driven is not enough
+
+Steps 1–3 are driven by what changed. That catches everything a commit makes
+wrong, and nothing else — which leaves a whole category untouched: a claim in a
+section no commit happened to touch, resting on a file that quietly moved on. A
+test count. A "there is no release workflow" note written before someone added
+one. Nothing in the diff points at these, so no amount of care in step 3 finds
+them.
+
+That is what step 4 is for, and why it is not optional. `review` lists the
+claims whose evidence has moved since anyone confirmed them, and the ones that
+rot in silence by construction — counts and assertions of absence. Rule on each:
+correct it, or read the cited file and satisfy yourself it still holds.
+Finalizing re-stamps what survived, so the same findings do not come back.
+
+A claim you re-confirmed without reading the evidence is indistinguishable from
+one you never looked at. That is the failure this step exists to prevent, and
+the only person who can tell the difference is you.
 
 ## The context log
 

@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 
-> **Status: v0.1.0, early release.** The deterministic layer is well tested (300+ automated tests, run on every push). The parts that depend on a live coding agent — the actual quality of generated context — need real-world use to prove out. See [Limitations](#limitations).
+> **Status: v0.4.0, early release.** The deterministic layer is well tested (300+ automated tests, run on every push). The parts that depend on a live coding agent — the actual quality of generated context — need real-world use to prove out. See [Limitations](#limitations).
 
 ---
 
@@ -113,6 +113,8 @@ context-maintainer/
 │       ├── scaffold.py            # safe file creation and backups
 │       ├── briefing.py            # the `status` report
 │       ├── doctor.py              # 18 deterministic health checks
+│       ├── verify.py              # documented claims vs repository evidence
+│       ├── drift.py               # claims that outlived the evidence they cite
 │       ├── repomix.py             # staged evidence gathering
 │       ├── mcp_companion.py       # optional companion detection
 │       ├── installer.py           # symlink management
@@ -359,6 +361,50 @@ trace. `status` shows the most recent entry.
 This is deliberately not a changelog. `STATE.md` is a snapshot and must never
 become a diary — the log exists so that rule can stay strict.
 
+### `review`
+
+Everything above is driven by *what changed*. That catches every claim a commit
+makes wrong — and nothing else. It cannot catch a stale test count, a "there is
+no release workflow" note written before someone added one, or a CI job that
+exists in the repository and in nobody's description of it. No commit
+contradicts any of those out loud, so no diff points at them.
+
+`review` is the other half. Every claim in these documents is already required
+to cite where it came from. `review` parses those citations, resolves them to
+real files, and reports the claims whose evidence has moved since anyone last
+confirmed them:
+
+```bash
+context-maintainer review
+context-maintainer review --json
+```
+
+```text
+docs/context/ARCHITECTURE.md
+  [WARN] STALE_EVIDENCE — Components
+      “| `doctor.py` | 18 deterministic health checks (`CHECKS` list) |”
+      rests on `…/doctor.py`, which has changed since this was last confirmed (b3aebed → 3010ebe)
+      → Re-read the claim against the current file. Correct it, or re-confirm it.
+```
+
+It reports seven kinds: `DANGLING_CITATION` (a cited file or commit does not
+exist), `VERSION_DRIFT` (the repo is tagged newer than any document describes),
+`STALE_EVIDENCE` (the cited file moved), `VOLATILE_NUMBER` (a count that nothing
+will correct when it stops being right), `NEGATIVE_CLAIM` (an assertion of
+absence, which no positive evidence can ever re-confirm), `COVERAGE_GAP`
+(something real that the documents describe none of while describing its
+siblings), and `UNATTESTED` (no baseline recorded yet).
+
+The baseline lives in `.context-maintainer/evidence.json`, re-stamped by
+`sync --finalize`. It records the commit each cited file was last touched by —
+**per citation, not per checkpoint**, which is what keeps this usable: a commit
+touching only `README.md` produces no findings at all unless a document cites
+`README.md`.
+
+Two properties are deliberate. Finalizing clears *staleness* and never clears a
+*defect*, so re-stamping cannot launder a dangling citation into a clean report.
+And `review` only ever asks — it is `doctor` that decides whether a build fails.
+
 ### `doctor`
 
 18 deterministic checks, no judgment involved: required files present, manifest present / parseable / schema-valid, `CLAUDE.md` → `AGENTS.md` bridge intact, required sections present, decision entries present, leftover placeholders, checkpoint valid, checkpoint not far behind HEAD, cache ignored, context files not absurdly large, `AGENTS.md` not duplicating the context documents, links resolving, Repomix available, MCP companion configured, skill installed correctly, plugin manifests valid.
@@ -370,6 +416,14 @@ context-maintainer doctor --strict   # treat context warnings as failures (for C
 ```
 
 Exit code is 0 for PASS/WARN and 1 for FAIL. It reports and never repairs.
+
+`--verify` adds two content checks on top of the structural ones:
+`claims_verified` (is a documented command or technology contradicted by the
+repository?) and `context_drift` (has a claim outlived the evidence it cites?).
+`context_drift` fails on unambiguous defects — a citation pointing at nothing, a
+release newer than any document — and warns when evidence has merely moved.
+The rest of the drift worklist stays in `review`, so a pull request that touched
+code does not turn red for claims that are probably still true.
 
 ### `rebuild`
 

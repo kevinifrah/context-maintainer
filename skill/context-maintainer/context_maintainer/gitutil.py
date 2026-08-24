@@ -167,3 +167,32 @@ def is_path_dirty(root: Path, relative_path: str) -> bool:
     if result.returncode != 0:
         return False
     return bool(result.stdout.strip())
+
+
+def get_tags(root: Path) -> List[str]:
+    """Tags, newest version first.
+
+    `--sort=-v:refname` orders `v0.10.0` above `v0.9.0`, which plain lexical
+    sorting gets wrong — and a released-version claim compared against the
+    wrong "latest" tag is worse than no comparison at all.
+    """
+    result = _run(root, "tag", "--sort=-v:refname", check=False)
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def get_last_commit_touching(root: Path, relative_path: str) -> Optional[str]:
+    """Short SHA of the most recent commit that changed `relative_path`.
+
+    This is the per-file baseline that makes evidence drift precise: a claim
+    citing `doctor.py` goes stale when `doctor.py` moves, and stays untouched
+    when some unrelated file does. Comparing against the checkpoint instead
+    would flag every claim on every commit.
+    """
+    result = _run(
+        root, "log", "-1", "--pretty=format:%h", "--", relative_path, check=False
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import __version__, briefing, contract, doctor, gitutil, manifest as manifest_mod
-from . import contextlog
+from . import contextlog, drift
 from . import installer as installer_mod
 from . import mcp_companion, repomix as repomix_mod, repository, scaffold
 
@@ -74,6 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also check documented claims against repository evidence.",
     )
+
+    review_parser = subparsers.add_parser(
+        "review",
+        help="List documented claims whose evidence has moved, for adjudication.",
+    )
+    review_parser.add_argument("--json", action="store_true")
 
     rebuild_parser = subparsers.add_parser(
         "rebuild",
@@ -347,6 +353,14 @@ def _finalize_checkpoint(
         loaded.state_confirmed_at = manifest_mod.utc_now()
     manifest_mod.save_manifest(loaded, root / contract.MANIFEST_PATH)
 
+    # Re-stamp what each document now rests on. Read from the current prose
+    # rather than carried forward, so the baseline always describes the claims
+    # as they now stand. This clears *staleness* only — a dangling citation or
+    # a version contradiction still fails `doctor`, so finalizing can never
+    # launder a defect into a clean report.
+    drift.record_attestation(root, target, loaded.last_synced_at or manifest_mod.utc_now())
+    remaining = drift.analyse(root)
+
     logged = contextlog.append_entry(root, commit=target, files=updated, note=note)
 
     payload = {
@@ -355,10 +369,17 @@ def _finalize_checkpoint(
         "last_synced_at": loaded.last_synced_at,
         "context_files_updated": updated,
         "logged": str(logged) if logged else None,
+        "unresolved_defects": [f.to_dict() for f in remaining.defects],
     }
     lines = [f"Checkpoint advanced to {target[:8]} at {loaded.last_synced_at}."]
     if updated:
         lines.append("Context files updated: " + ", ".join(updated))
+    if remaining.defects:
+        lines.append(
+            f"WARNING: {len(remaining.defects)} unresolved context defect(s) "
+            "remain — attesting does not fix them. Run "
+            "`context-maintainer review`."
+        )
     if logged:
         lines.append(f"Recorded in {contextlog.LOG_RELPATH}.")
     elif not note:
@@ -411,11 +432,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
     working = gitutil.get_working_tree_changes(root)
 
+    # Drift rides along with the change evidence rather than waiting to be
+    # asked for. `sync` is the one command an agent always runs before deciding
+    # what to update, and a signal that needs a separate command to discover is
+    # a signal that gets skipped.
+    drift_report = drift.analyse(root)
+    drift_counts = drift.summarise(drift_report.findings)
+
     payload = {
         "ok": True,
         "checkpoint": checkpoint,
         "head": head,
         "note": note,
+        "claims_to_adjudicate": drift_counts,
         "commits": [{"sha": sha, "subject": subject} for sha, subject in commits],
         "changed_files": [{"status": status, "path": path} for status, path in changed],
         "working_tree_changes": [
@@ -445,6 +474,16 @@ def cmd_sync(args: argparse.Namespace) -> int:
         lines.append("")
         lines.append(f"Uncommitted working-tree changes ({len(working)}):")
         lines.extend(f"  {status:<3} {path}" for status, path in working[:20])
+    actionable = drift_counts[drift.DEFECT] + drift_counts[drift.WARN]
+    if actionable:
+        lines.append("")
+        lines.append(
+            f"Claims needing adjudication: {actionable} "
+            f"({drift_counts[drift.DEFECT]} defect(s)). "
+            "Run `context-maintainer review` — these are claims that may have "
+            "stopped being true without any commit contradicting them."
+        )
+
     if not commits and not changed and not working:
         lines.append("")
         lines.append("No changes to review.")
@@ -463,6 +502,20 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     report = doctor.run_all_checks(root, verify=args.verify)
     _emit(report.to_dict(), doctor.render_text(report), args.json)
     return 1 if report.failed(strict=args.strict) else 0
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    """The adjudication worklist: which claims need a human or agent ruling.
+
+    Separate from `doctor` on purpose. `doctor` asserts defects; this asks
+    questions, and the answer to most of them is "still true". Mixing the two
+    would either turn honest uncertainty into build failures or bury real
+    defects in a list of things to think about.
+    """
+    root = _resolve_root()
+    report = drift.analyse(root)
+    _emit(report.to_dict(), drift.render_text(report), args.json)
+    return 0
 
 
 def cmd_rebuild(args: argparse.Namespace) -> int:
@@ -595,6 +648,23 @@ def session_start_notice(root: Path) -> Optional[str]:
             "unfilled template placeholders"
         )
 
+    # Claim drift is the failure mode a commit count cannot see: nothing may
+    # have changed for weeks and the documents can still have stopped being
+    # true. Reported here because this is the only moment an agent is told
+    # anything without having asked.
+    try:
+        drift_report = drift.analyse(root)
+        needing = len(drift_report.defects) + len(
+            [f for f in drift_report.findings if f.kind == drift.STALE_EVIDENCE]
+        )
+        if needing:
+            problems.append(
+                f"{needing} documented claim{'s' if needing != 1 else ''} "
+                "rest on evidence that has since changed"
+            )
+    except Exception:
+        pass
+
     if not problems:
         return None
 
@@ -605,8 +675,10 @@ def session_start_notice(root: Path) -> Optional[str]:
     notice = (
         "Context Maintainer: this project's recorded context may be out of "
         "date — " + "; ".join(problems) + ". Read docs/context/PROJECT.md and "
-        "docs/context/STATE.md before substantial work, and run the "
-        "context-maintainer sync workflow if what they say is no longer true."
+        "docs/context/STATE.md before substantial work, run "
+        "`context-maintainer review` to see which specific claims need "
+        "re-checking, and run the context-maintainer sync workflow if what "
+        "they say is no longer true."
     )
     if len(notice) > MAX_HOOK_NOTICE_CHARS:
         notice = notice[: MAX_HOOK_NOTICE_CHARS - 1].rstrip() + "…"
@@ -674,6 +746,7 @@ _HANDLERS = {
     "init": cmd_init,
     "status": cmd_status,
     "sync": cmd_sync,
+    "review": cmd_review,
     "doctor": cmd_doctor,
     "rebuild": cmd_rebuild,
     "audit": cmd_audit,

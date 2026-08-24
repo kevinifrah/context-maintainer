@@ -14,13 +14,22 @@ CONTRIBUTING.md "The two rules that matter"):
 - **The CLI** (`context_maintainer` Python package, stdlib only) does
   everything mechanical: repo root and blank-vs-existing detection, Git
   state, scaffolding files, manifest/checkpoint bookkeeping, structural
-  validation (`doctor`), and staged evidence gathering (`audit`). It never
-  writes prose or interprets meaning.
+  validation (`doctor`), staged evidence gathering (`audit`), and — since
+  v0.4.0 — computing which documented claims have outlived their evidence
+  (`review`). It never writes prose or interprets meaning.
 
 The skill calls the CLI and consumes its `--json` output; the CLI never
 reasons about content. This project *is* Context Maintainer's own
 implementation — running `/context-maintainer:context-maintainer` in this
 repository operates on itself.
+
+The division holds even for accuracy checking, and the split is the load-bearing
+idea: the CLI can decide mechanically whether a claim's *evidence has moved*,
+but only the agent can decide whether the claim is still *true*. So the CLI
+produces a bounded, localized worklist and the agent adjudicates it. Neither
+half can do the other's job — which is why v0.3.0's purely mechanical
+verification left real drift undetected, and why an instruction to "keep context
+current" without a worklist left it undetected too. See DEC-006.
 
 ## Components
 
@@ -40,6 +49,7 @@ Persistence/Integrations below). CONFIRMED by direct reading:
 | `briefing.py` | Builds the `status` report |
 | `doctor.py` | 18 deterministic health checks (`CHECKS` list), plus an optional `--verify` pass (v0.3.0) that cross-checks documented claims against evidence |
 | `verify.py` | Backs `doctor --verify`: extracts documented commands (WORKFLOWS.md) and technologies (ARCHITECTURE.md) and checks each against repo evidence (marker file, dependency entry, source usage), yielding CONFIRMED / UNVERIFIED / CONTRADICTED per claim — never fails on UNVERIFIED, only on CONTRADICTED |
+| `drift.py` | Backs `review` and `doctor --verify`'s `context_drift` check (v0.4.0). Segments each context document into claim-sized blocks, resolves the citations they carry against a repo path index, and compares each cited file to the baseline in `.context-maintainer/evidence.json`. Reports DANGLING_CITATION, VERSION_DRIFT, STALE_EVIDENCE, VOLATILE_NUMBER, NEGATIVE_CLAIM, COVERAGE_GAP, UNATTESTED. Also owns the ledger (`record_attestation`, called by `sync --finalize`) |
 | `repomix.py` | Staged Repomix invocation (structure pass, full pass) and degraded-mode handling |
 | `mcp_companion.py` | Detects an optional configured `mcp-language-server` |
 | `installer.py` | Symlink install/uninstall + marketplace-plugin-install detection |
@@ -99,10 +109,16 @@ there is no database, cache service, or external store:
 - `.context-maintainer/manifest.json` — machine metadata only (schema
   version, init mode, checkpoint commit, timestamps, tool versions); unknown
   keys are rejected specifically to keep product knowledge out of it.
+- `.context-maintainer/evidence.json` (v0.4.0) — the attestation ledger: per
+  context document, the commit it was attested at and the commit each cited
+  file was last touched by. Separate from `manifest.json` because that file is
+  metadata-only and rejects unknown keys, and because a per-citation baseline
+  would swamp it. Committed, since it must travel with the repository.
 - `.context-maintainer/cache/` — raw audit artifacts (Repomix output, etc.),
   git-ignored, never the canonical output.
 
-CONFIRMED: README "The context contract", `contract.py`, `.gitignore`.
+CONFIRMED: README "The context contract", `contract.py`, `.gitignore`,
+`drift.py`.
 
 ## Integrations
 

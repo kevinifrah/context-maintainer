@@ -7,6 +7,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.4.0] — 2026-08-24
+
+The release that makes context *self-maintaining*, by giving the agent a
+bounded worklist instead of trusting it to notice.
+
+v0.3.0 made claims checkable, and this repository still drifted underneath it:
+a stale test count, a phase that had moved on, a CI job described nowhere.
+`doctor --verify --strict` was green the whole time, because contradiction-
+checking can only judge claims that exist and only in a closed vocabulary.
+Nothing in a diff points at a sentence that quietly stopped being true.
+
+### Added
+- **`context-maintainer review`** — the claims worklist. Prose truth is not
+  mechanically decidable, but evidence *movement* is: every claim already cites
+  where it came from, so `review` resolves those citations and reports the ones
+  whose evidence has moved since anyone confirmed them. Reports seven kinds —
+  `DANGLING_CITATION`, `VERSION_DRIFT`, `STALE_EVIDENCE`, `VOLATILE_NUMBER`,
+  `NEGATIVE_CLAIM`, `COVERAGE_GAP`, `UNATTESTED`.
+- **`.context-maintainer/evidence.json`** — the attestation ledger, re-stamped
+  by `sync --finalize`. Records the commit each cited file was last touched by,
+  **per citation rather than per checkpoint**: a commit touching only
+  `README.md` produces no findings unless a document cites `README.md`. Without
+  that precision the signal would fire on every commit and be ignored.
+- **`doctor --verify` gains `context_drift`** — fails on unambiguous defects (a
+  citation pointing at nothing, a release newer than any document), warns when
+  evidence has merely moved. Judgment-shaped findings stay in `review` so a
+  pull request that touched code does not go red for claims that are probably
+  fine.
+- **`gitutil.get_tags` and `get_last_commit_touching`** — the two primitives
+  drift detection needs.
+- Drift now rides along in `sync --json` (`claims_to_adjudicate`) and in the
+  session-start notice, because a signal that needs its own command to discover
+  is a signal that gets skipped.
+
+### Changed
+- **The skill now tells the agent to re-validate existing claims.** Until now
+  nothing did: every trigger was change-driven or structural, and `--verify`
+  was not mentioned anywhere in `SKILL.md` or `references/`, so the one check
+  that tested truth was invisible to the agent meant to run it. `sync` gained an
+  adjudication step, `doctor` guidance now says to pass `--verify`.
+- `references/evidence-policy.md` reconciles the two vocabularies that had been
+  drifting apart — the CONFIRMED/INFERRED/UNKNOWN grade an author writes versus
+  the CONFIRMED/UNVERIFIED/CONTRADICTED verdict the CLI reports — and asks for
+  citations that can actually be re-checked later.
+- `DECISIONS.md` is exempt from current-state drift checks: it records what was
+  true when a decision was taken, and re-checking it against today's repository
+  would ask authors to rewrite history the contract forbids rewriting.
+
 ## [0.3.0] — 2026-08-24
 
 The release that makes context *checkable* rather than merely well-formed.

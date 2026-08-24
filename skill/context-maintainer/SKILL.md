@@ -1,6 +1,6 @@
 ---
 name: context-maintainer
-description: Create and maintain durable project context (docs/context/PROJECT.md, ARCHITECTURE.md, WORKFLOWS.md, STATE.md, DECISIONS.md plus AGENTS.md and CLAUDE.md) so any coding agent can quickly understand a project. Use for init, status, sync, doctor, and rebuild of a repository's context, and whenever project reality has changed enough that the recorded context is now wrong.
+description: Create and maintain durable project context (docs/context/PROJECT.md, ARCHITECTURE.md, WORKFLOWS.md, STATE.md, DECISIONS.md plus AGENTS.md and CLAUDE.md) so any coding agent can quickly understand a project. Use for init, status, sync, review, doctor, and rebuild of a repository's context, and whenever project reality has changed enough that the recorded context is now wrong.
 license: MIT
 ---
 
@@ -21,6 +21,7 @@ needs judgment.
 | List commits/files changed since checkpoint | Decide which of those changes actually matter |
 | Validate structure (`doctor`) | Grade evidence CONFIRMED / INFERRED / UNKNOWN |
 | Gather Repomix evidence (`audit`) | Read that evidence and synthesise a model |
+| List claims whose evidence moved (`review`) | Rule on whether each is still true |
 
 Never ask the CLI to reason. Never do by hand what the CLI already does.
 
@@ -81,29 +82,75 @@ Incremental maintenance. This is the command that runs most often, so it must
 stay cheap and must not churn the documents.
 
 1. `context-maintainer sync --json` — gives commits and files changed since the
-   recorded checkpoint, plus uncommitted work.
+   recorded checkpoint, plus uncommitted work and a `claims_to_adjudicate`
+   count.
 2. Decide which documents, if any, those changes affect. Follow
    `references/sync-policy.md`. Most changes affect nothing.
 3. Read a section before concluding it is unaffected. Do not diff prose from
    memory.
-4. Edit only the sections that are genuinely now wrong. Leave everything else
+4. **`context-maintainer review --json` — adjudicate every claim it lists.**
+   These are claims that may have stopped being true without any commit
+   contradicting them, so nothing in step 1 will point at them. See `review`
+   below.
+5. Edit only the sections that are genuinely now wrong. Leave everything else
    byte-identical.
-5. `context-maintainer sync --finalize --note "<one line on what changed
-   and why>"` to advance the checkpoint and record the update.
-6. `context-maintainer doctor` to confirm you left the contract valid.
+6. `context-maintainer sync --finalize --note "<one line on what changed
+   and why>"` to advance the checkpoint, record the update, and re-stamp the
+   evidence each document now rests on.
+7. `context-maintainer doctor --verify` to confirm you left the contract valid
+   *and* left no claim contradicted or citing something that does not exist.
 
 Never re-scan the whole repository during `sync`. If a change is large enough
 that incremental reasoning fails, say so and recommend `rebuild`.
 
+## review
+
+The claims worklist. `doctor` asks whether the documents are well-formed;
+`review` asks whether they are still *true*, and hands you the specific
+sentences to rule on.
+
+1. `context-maintainer review --json`.
+2. **Rule on every finding.** For each one, either correct the claim or satisfy
+   yourself it is still true. Read the cited file — this is exactly the moment
+   "I'm sure it's fine" produces a wrong document.
+3. Re-confirm what survived with `context-maintainer sync --finalize --note
+   "..."`. That re-stamps the evidence baseline; until you do, the same
+   findings come back next session.
+
+What the findings mean:
+
+| Kind | What it is telling you |
+| --- | --- |
+| `DANGLING_CITATION` | A cited file or commit does not exist. Always a defect — fix the citation. |
+| `VERSION_DRIFT` | The repository is tagged newer than anything the documents describe. |
+| `STALE_EVIDENCE` | The file this claim cites has changed since anyone confirmed the claim. It may still be true; nobody has checked. |
+| `VOLATILE_NUMBER` | A count ("415 tests"). Nothing edits that sentence when the number changes. |
+| `NEGATIVE_CLAIM` | An assertion that something is absent. No positive evidence can ever re-confirm it, and nothing announces itself when it stops being true. |
+| `COVERAGE_GAP` | Something real (a CI job) that the documents describe none of, while describing its siblings. |
+| `UNATTESTED` | No baseline recorded yet. Finalize once to start tracking. |
+
+Finalizing clears staleness. It never clears a defect — a dangling citation
+still fails `doctor` afterwards, on purpose, so re-stamping cannot be used to
+make a broken document look clean.
+
 ## doctor
 
-1. `context-maintainer doctor --json`.
+1. `context-maintainer doctor --verify --json`. Use `--verify`: without it,
+   `doctor` checks only *form*, and a document can pass every structural check
+   while being false throughout.
 2. Report PASS / WARN / FAIL per check, with the remediation the CLI supplies.
 3. Fix only what the user asks you to fix. `doctor` diagnoses; it does not
    silently repair.
 
 A WARN for a missing Repomix or MCP companion is not a defect — it means
 reduced capability, and you should say which.
+
+`--verify` adds two checks that judge content rather than structure:
+`claims_verified` (is a documented command or technology contradicted by the
+repository?) and `context_drift` (has a claim outlived the evidence it cites?).
+A CONTRADICTED claim means either the document is wrong or the evidence is not
+machine-visible — reword rather than delete, and never delete a claim merely to
+make a check pass.
 
 ## rebuild
 

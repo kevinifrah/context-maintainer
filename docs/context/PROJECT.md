@@ -35,17 +35,21 @@ persona anywhere.
 
 ## Success Criteria
 
-- `doctor`'s 18 deterministic checks pass (0 FAIL) on a maintained repository;
+- `doctor`'s deterministic checks pass (0 FAIL) on a maintained repository;
   since v0.3.0 an optional `--verify` pass also cross-checks documented
   claims against repository evidence, and this repository's own CI (
   `context-check` job) runs it with `--strict` on every push/PR. CONFIRMED:
   README "Commands" / `doctor`, CONTRIBUTING.md, `docs/CI.md`.
+- A documented claim cannot outlive the evidence it cites without someone
+  being told. Since v0.4.0 `context-maintainer review` reports claims whose
+  cited files have moved, and the agent is required to rule on each. CONFIRMED:
+  `drift.py`, `docs/CI.md`, DEC-006.
 - `sync` stays incremental — most changes update nothing, and full repository
   re-scans happen only via the exceptional `rebuild` path. CONFIRMED:
   README "sync", CONTRIBUTING design principle #7.
-- The deterministic layer (CLI) is well tested — 415 tests currently pass
-  locally via `pytest -q` as of 2026-08-24 (CONFIRMED by running the suite;
-  README states "300+ automated tests", which still holds).
+- The deterministic layer (CLI) is well tested; the exact count lives in
+  WORKFLOWS.md "Testing" so there is one place to update. CONFIRMED by running
+  the suite (README states "300+ automated tests", which still holds).
 - The judgment layer (the skill, running inside a live coding agent) produces
   context that is actually accurate and useful, not merely well-structured.
   The README states this explicitly has **not** yet been proven out: "Status:
