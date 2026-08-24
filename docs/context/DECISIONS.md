@@ -211,9 +211,13 @@ content hashes instead of per-document attestation (rejected — any rewording
 loses the attestation and the state grows without bound); compute staleness
 against the sync checkpoint rather than per citation (rejected — it would flag
 every claim on every commit, and a signal that fires constantly is a signal that
-gets switched off); fail CI on the whole worklist (rejected for DEC-005's
-reason — moved evidence means *unverified*, not wrong, and turning every
-code-touching pull request red would destroy the gate's credibility).
+gets switched off); fail CI on the whole worklist (tried, and reverted the same day
+after this repository's CI demonstrated the flaw: a commit editing `drift.py`
+turned eleven claims stale and failed the build, and the cheapest way back to
+green was `sync --finalize` with no re-reading — so the gate would have paid
+contributors to perform exactly the blind attestation named below as this
+design's blind spot. `context_drift` now sits in `ADVISORY_CHECKS`, which
+suppresses WARN promotion while leaving its FAIL fully enforcing).
 
 Consequences: Attestation is per document, so an agent *can* re-stamp without
 genuinely re-reading each claim; the mechanics localize and demand, but cannot

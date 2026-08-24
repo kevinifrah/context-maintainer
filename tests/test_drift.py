@@ -384,8 +384,13 @@ def test_doctor_verify_fails_on_a_dangling_citation(git_repo: Path):
     assert report.failed(strict=False), "a broken citation is unambiguous enough to fail"
 
 
-def test_doctor_verify_warns_but_does_not_fail_on_moved_evidence(git_repo: Path):
-    """Moved evidence means unverified, not wrong — it asks rather than blocks."""
+def test_moved_evidence_does_not_fail_the_build_even_under_strict(git_repo: Path):
+    """Moved evidence means unverified, not wrong — it asks rather than blocks.
+
+    This is not merely about noise. If `--strict` failed here, the cheapest way
+    back to a green build would be `sync --finalize` with no re-reading at all,
+    so the gate would reward exactly the blind re-stamping DEC-006 warns about.
+    """
     from context_maintainer import doctor
 
     root = _project(git_repo)
@@ -398,8 +403,21 @@ def test_doctor_verify_warns_but_does_not_fail_on_moved_evidence(git_repo: Path)
     assert result.status == doctor.WARN
     assert not report.failed(strict=False)
 
+    # Isolate this check: a freshly scaffolded fixture carries other warnings
+    # (placeholders) that legitimately do fail under --strict.
+    alone = doctor.DoctorReport(results=[result])
+    assert not alone.failed(strict=True), "staleness must never break a build"
 
-def test_context_drift_is_not_advisory_so_strict_enforces_it(git_repo: Path):
+
+def test_a_defect_still_fails_even_though_the_check_is_advisory(git_repo: Path):
+    """Advisory suppresses WARN promotion only. A FAIL is always a FAIL."""
     from context_maintainer import doctor
 
-    assert "context_drift" not in doctor.ADVISORY_CHECKS
+    assert "context_drift" in doctor.ADVISORY_CHECKS
+
+    root = _project(git_repo)
+    _set_section(root, "Components", "Sessions live in `src/sessions.py`.")
+    commit_all(root, "Cite a missing file")
+
+    report = doctor.run_all_checks(root, verify=True)
+    assert report.failed(strict=False)

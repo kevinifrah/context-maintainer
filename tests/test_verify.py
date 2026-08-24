@@ -298,7 +298,9 @@ def test_every_advisory_check_name_is_a_real_check():
 
     with tempfile.TemporaryDirectory() as tmp:
         emitted = {c(_P(tmp)).name for c in doctor.CHECKS}
+    # Verify-only checks are not in CHECKS, so name them explicitly.
     emitted.add("claims_verified")
+    emitted.add("context_drift")
     unknown = doctor.ADVISORY_CHECKS - emitted
     assert not unknown, f"ADVISORY_CHECKS names no real check: {unknown}"
 

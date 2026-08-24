@@ -32,9 +32,13 @@ Nothing in a diff points at a sentence that quietly stopped being true.
   that precision the signal would fire on every commit and be ignored.
 - **`doctor --verify` gains `context_drift`** — fails on unambiguous defects (a
   citation pointing at nothing, a release newer than any document), warns when
-  evidence has merely moved. Judgment-shaped findings stay in `review` so a
-  pull request that touched code does not go red for claims that are probably
-  fine.
+  evidence has merely moved. It is the only check in both halves of
+  `docs/CI.md`'s tables: its FAIL breaks the build, while its WARN sits in
+  `ADVISORY_CHECKS` so `--strict` cannot promote it. That is deliberate and was
+  corrected after this repository's own CI proved the alternative wrong — if
+  staleness failed the build, the cheapest route to green would be re-stamping
+  the ledger without re-reading anything, so the gate would reward precisely
+  the dishonesty DEC-006 identifies as its blind spot.
 - **`gitutil.get_tags` and `get_last_commit_touching`** — the two primitives
   drift detection needs.
 - Drift now rides along in `sync --json` (`claims_to_adjudicate`) and in the

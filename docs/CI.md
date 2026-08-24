@@ -34,7 +34,7 @@ them would make `--strict` useless for the one job it exists to do.
 | `no_duplication` | `AGENTS.md` has become a knowledge dump |
 | `context_size` | A document has grown far beyond a briefing |
 | `claims_verified` | **A documented claim is contradicted by the repository** |
-| `context_drift` | **A claim cites a file or commit that does not exist, or the repository is tagged newer than any context document describes** |
+| `context_drift` (FAIL only) | **A claim cites a file or commit that does not exist, or the repository is tagged newer than any context document describes.** Its WARN is advisory — see below |
 | `plugin_manifests` | Only relevant when developing the tool itself |
 
 **Never fails the build** (`ADVISORY_CHECKS`):
@@ -46,19 +46,26 @@ them would make `--strict` useless for the one job it exists to do.
 | `skill_installation` | CI has no agent host installed |
 | `checkpoint_freshness` | A pull request is legitimately ahead of the last sync |
 | `state_freshness` | Punishing an unrelated PR because nobody confirmed STATE recently is the wrong lever |
+| `context_drift` (WARN only) | A claim's evidence moved. Unverified is not wrong — see below |
 
 ### What `context_drift` deliberately does *not* fail on
 
-`context-maintainer review` reports more than `context_drift` enforces. Claims
-whose evidence merely *moved*, counts worth re-checking, and assertions of
-absence are all judgment work: usually the claim is still true and only a person
-or an agent can say so. Failing a build on them would turn every pull request
-that touched code red for reasons unrelated to whether the documents are wrong —
-the same mistake `--strict` avoids by keeping environmental warnings advisory.
+`context_drift` is the only check that appears in both tables, because it emits
+both kinds of result. A citation pointing at nothing is a defect and fails the
+build. A claim whose evidence merely *moved* is **unverified, not wrong**, and
+is listed in `ADVISORY_CHECKS` so `--strict` never promotes it.
+
+That second half is not a concession to noise. If staleness failed the build,
+the cheapest way back to green would be `context-maintainer sync --finalize` —
+re-stamping the ledger without re-reading a single claim. The gate would then
+actively reward the one failure mode this whole mechanism cannot detect (see
+DEC-006's Consequences). A check that pays people to lie to it is worse than no
+check.
 
 So the split is: `doctor` fails on what is unambiguously broken, `review` asks
-about what needs a ruling. If you want the stricter behaviour in CI, run
-`context-maintainer review --json` and gate on the counts yourself.
+about what needs a ruling. If you want to enforce the worklist anyway, run
+`context-maintainer review --json` and gate on the counts yourself — but be
+aware you are building that incentive.
 
 ## GitHub Actions
 

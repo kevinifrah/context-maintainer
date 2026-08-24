@@ -34,6 +34,15 @@ ADVISORY_CHECKS = frozenset(
         "skill_installation",
         "checkpoint_freshness",
         "state_freshness",
+        # Listed here only to stop `--strict` promoting its WARN. This check
+        # still FAILs on its own for an unambiguous defect, and a FAIL is never
+        # advisory. Its WARN means "a claim's evidence moved, so nobody has
+        # re-checked it" — unverified, not wrong. Promoting that would turn
+        # every pull request touching a documented file red, and the cheapest
+        # way back to green would be re-stamping the ledger without re-reading
+        # anything: the build would actively reward the dishonest attestation
+        # DEC-006 warns about. The worklist belongs in `review`, not the gate.
+        "context_drift",
     }
 )
 
